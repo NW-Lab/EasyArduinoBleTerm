@@ -23,61 +23,67 @@ struct GraphCanvas: View {
     let gridInterval: Double
 
     var body: some View {
-        GeometryReader { geo in
-            let w = geo.size.width
-            let h = geo.size.height
-            let ySpan = yMax - yMin
+        Canvas { context, size in
+            let w = size.width
+            let h = size.height
+            let ySpan = max(yMax - yMin, 1e-9)
 
-            Canvas { context, size in
-                // Background
-                context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(UIColor.systemBackground)))
+            // Background
+            context.fill(
+                Path(CGRect(origin: .zero, size: size)),
+                with: .color(Color(UIColor.systemBackground))
+            )
 
-                // Grid lines (vertical / time)
-                let firstGrid = (visibleStartTime / gridInterval).rounded(.up) * gridInterval
-                var t = firstGrid
-                while t <= visibleStartTime + displayTimeSpan {
-                    let x = CGFloat((t - visibleStartTime) / displayTimeSpan) * w
-                    var path = Path()
-                    path.move(to: CGPoint(x: x, y: 0))
-                    path.addLine(to: CGPoint(x: x, y: h))
-                    context.stroke(path, with: .color(.gray.opacity(0.3)), lineWidth: 0.5)
-                    t += gridInterval
-                }
-
-                // Zero line
-                if yMin < 0 && yMax > 0 {
-                    let zeroY = h - CGFloat((0 - yMin) / ySpan) * h
-                    var zeroPath = Path()
-                    zeroPath.move(to: CGPoint(x: 0, y: zeroY))
-                    zeroPath.addLine(to: CGPoint(x: w, y: zeroY))
-                    context.stroke(zeroPath, with: .color(.gray.opacity(0.6)), lineWidth: 1)
-                }
-
-                // Plot each channel
-                for channel in channels where channel.isEnabled {
-                    let visiblePoints = channel.points.filter {
-                        $0.time >= visibleStartTime - 0.01 &&
-                        $0.time <= visibleStartTime + displayTimeSpan + 0.01
-                    }
-                    guard visiblePoints.count >= 2 else { continue }
-
-                    var path = Path()
-                    var started = false
-                    for pt in visiblePoints {
-                        let x = CGFloat((pt.time - visibleStartTime) / displayTimeSpan) * w
-                        let y = h - CGFloat((pt.value - yMin) / ySpan) * h
-                        let clamped = CGPoint(x: x, y: max(-5, min(h + 5, y)))
-                        if !started {
-                            path.move(to: clamped)
-                            started = true
-                        } else {
-                            path.addLine(to: clamped)
-                        }
-                    }
-                    context.stroke(path, with: .color(channel.color.color), lineWidth: 2)
-                }
+            // Vertical grid lines (time axis)
+            guard gridInterval > 0, displayTimeSpan > 0 else { return }
+            let firstGrid = (visibleStartTime / gridInterval).rounded(.up) * gridInterval
+            var t = firstGrid
+            let endT = visibleStartTime + displayTimeSpan
+            // 最大グリッド線数を制限して無限ループを防止
+            let maxGridLines = Int(displayTimeSpan / gridInterval) + 2
+            var gridCount = 0
+            while t <= endT + gridInterval * 0.001 && gridCount < maxGridLines {
+                let x = CGFloat((t - visibleStartTime) / displayTimeSpan) * w
+                var path = Path()
+                path.move(to: CGPoint(x: x, y: 0))
+                path.addLine(to: CGPoint(x: x, y: h))
+                context.stroke(path, with: .color(.gray.opacity(0.3)), lineWidth: 0.5)
+                t += gridInterval
+                gridCount += 1
             }
-            .frame(width: w, height: h)
+
+            // Zero line
+            if yMin < 0 && yMax > 0 {
+                let zeroY = h - CGFloat((0 - yMin) / ySpan) * h
+                var zeroPath = Path()
+                zeroPath.move(to: CGPoint(x: 0, y: zeroY))
+                zeroPath.addLine(to: CGPoint(x: w, y: zeroY))
+                context.stroke(zeroPath, with: .color(.gray.opacity(0.6)), lineWidth: 1)
+            }
+
+            // Plot each enabled channel
+            for channel in channels where channel.isEnabled {
+                let lo = visibleStartTime - gridInterval
+                let hi = endT + gridInterval
+                let visiblePoints = channel.points.filter { $0.time >= lo && $0.time <= hi }
+                guard visiblePoints.count >= 2 else { continue }
+
+                var path = Path()
+                var started = false
+                for pt in visiblePoints {
+                    let x = CGFloat((pt.time - visibleStartTime) / displayTimeSpan) * w
+                    let rawY = h - CGFloat((pt.value - yMin) / ySpan) * h
+                    let clampedY = max(-5, min(h + 5, rawY))
+                    let point = CGPoint(x: x, y: clampedY)
+                    if !started {
+                        path.move(to: point)
+                        started = true
+                    } else {
+                        path.addLine(to: point)
+                    }
+                }
+                context.stroke(path, with: .color(channel.color.color), lineWidth: 2)
+            }
         }
     }
 }
@@ -124,7 +130,7 @@ struct TimeScaleOverlay: View {
             Spacer()
             HStack {
                 Spacer()
-                Text("← \(formatSpan(displayTimeSpan)) / div: \(formatSpan(gridInterval)) →")
+                Text("表示幅: \(formatSpan(displayTimeSpan)) / 目盛: \(formatSpan(gridInterval))")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(.secondary)
                     .padding(4)
@@ -136,21 +142,23 @@ struct TimeScaleOverlay: View {
     }
 
     private func formatSpan(_ s: Double) -> String {
-        if s >= 1 { return String(format: "%.4g s", s) }
-        return String(format: "%.4g s", s)
+        String(format: "%.4g s", s)
     }
 }
 
 // MARK: - Channel Selector
+/// Bindingを使わず vm.toggleChannel() 経由で変更することで
+/// channels 配列全体の再評価による無限再描画を防止する
 struct ChannelSelectorView: View {
-    @Binding var channels: [PlotChannel]
+    let channels: [PlotChannel]
+    let onToggle: (Int) -> Void
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                ForEach($channels) { $ch in
+                ForEach(channels) { ch in
                     Button {
-                        ch.isEnabled.toggle()
+                        onToggle(ch.id)
                     } label: {
                         HStack(spacing: 4) {
                             Circle()
@@ -161,7 +169,11 @@ struct ChannelSelectorView: View {
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(ch.isEnabled ? ch.color.color.opacity(0.15) : Color(UIColor.secondarySystemBackground))
+                        .background(
+                            ch.isEnabled
+                                ? ch.color.color.opacity(0.15)
+                                : Color(UIColor.secondarySystemBackground)
+                        )
                         .cornerRadius(12)
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
@@ -244,13 +256,11 @@ struct YAxisSettingsSheet: View {
 struct PlotterView: View {
     @ObservedObject var vm: PlotterViewModel
     @State private var showYSettings: Bool = false
-    @GestureState private var pinchScale: CGFloat = 1.0
 
     var body: some View {
         VStack(spacing: 0) {
             // Top toolbar
             HStack(spacing: 8) {
-                // Time scale picker
                 Picker("時間幅", selection: Binding(
                     get: { vm.timeScale },
                     set: { vm.applyTimeScale($0) }
@@ -264,16 +274,15 @@ struct PlotterView: View {
 
                 Spacer()
 
-                // Y axis mode button
                 Button {
                     showYSettings = true
                 } label: {
-                    Label(vm.yAxisMode == .auto ? "自動" : "固定", systemImage: "arrow.up.arrow.down")
+                    Label(vm.yAxisMode == .auto ? "自動" : "固定",
+                          systemImage: "arrow.up.arrow.down")
                         .font(.caption)
                 }
                 .buttonStyle(.bordered)
 
-                // Clear button
                 Button(role: .destructive) {
                     vm.clearData()
                 } label: {
@@ -287,55 +296,19 @@ struct PlotterView: View {
 
             Divider()
 
-            // Channel selector
-            if !vm.channels.isEmpty {
-                ChannelSelectorView(channels: $vm.channels)
-                    .padding(.vertical, 4)
-                    .background(Color(UIColor.secondarySystemBackground))
+            // Channel selector (スナップショットを使用)
+            if !vm.channelSnapshots.isEmpty {
+                ChannelSelectorView(
+                    channels: vm.channelSnapshots,
+                    onToggle: { vm.toggleChannel($0) }
+                )
+                .padding(.vertical, 4)
+                .background(Color(UIColor.secondarySystemBackground))
                 Divider()
             }
 
             // Graph area
-            HStack(spacing: 0) {
-                // Y axis labels
-                YAxisLabels(yMin: vm.yRange.min, yMax: vm.yRange.max)
-
-                // Graph canvas with pinch gesture
-                ZStack {
-                    GraphCanvas(
-                        channels: vm.channels,
-                        visibleStartTime: vm.visibleStartTime,
-                        displayTimeSpan: vm.displayTimeSpan,
-                        yMin: vm.yRange.min,
-                        yMax: vm.yRange.max,
-                        gridInterval: vm.timeScale.gridInterval
-                    )
-
-                    TimeScaleOverlay(
-                        displayTimeSpan: vm.displayTimeSpan,
-                        gridInterval: vm.timeScale.gridInterval
-                    )
-                }
-                .gesture(
-                    MagnificationGesture()
-                        .onChanged { scale in
-                            // リアルタイムプレビューのため直接適用
-                        }
-                        .onEnded { scale in
-                            vm.applyPinch(scale: scale)
-                        }
-                )
-                .simultaneousGesture(
-                    MagnificationGesture()
-                        .updating($pinchScale) { value, state, _ in
-                            state = value
-                        }
-                )
-                .clipped()
-            }
-
-            // Empty state
-            if vm.channels.isEmpty {
+            if vm.channelSnapshots.isEmpty {
                 Spacer()
                 VStack(spacing: 8) {
                     Image(systemName: "waveform.path.ecg")
@@ -350,6 +323,35 @@ struct PlotterView: View {
                         .padding(.horizontal)
                 }
                 Spacer()
+            } else {
+                HStack(spacing: 0) {
+                    // Y axis labels
+                    YAxisLabels(yMin: vm.yRange.min, yMax: vm.yRange.max)
+
+                    // Graph canvas + pinch gesture
+                    ZStack {
+                        GraphCanvas(
+                            channels: vm.channelSnapshots,
+                            visibleStartTime: vm.visibleStartTime,
+                            displayTimeSpan: vm.displayTimeSpan,
+                            yMin: vm.yRange.min,
+                            yMax: vm.yRange.max,
+                            gridInterval: vm.timeScale.gridInterval
+                        )
+
+                        TimeScaleOverlay(
+                            displayTimeSpan: vm.displayTimeSpan,
+                            gridInterval: vm.timeScale.gridInterval
+                        )
+                    }
+                    .gesture(
+                        MagnificationGesture()
+                            .onEnded { scale in
+                                vm.applyPinch(scale: scale)
+                            }
+                    )
+                    .clipped()
+                }
             }
         }
         .sheet(isPresented: $showYSettings) {

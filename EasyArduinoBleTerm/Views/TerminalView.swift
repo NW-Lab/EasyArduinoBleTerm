@@ -6,6 +6,9 @@ struct TerminalView: View {
     @State private var inputText: String = ""
     @State private var autoScroll: Bool = true
 
+    // 最後にスクロールした行数。同じ行数なら再スクロールしない
+    @State private var lastScrolledCount: Int = 0
+
     private let timestampFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "HH:mm:ss.SSS"
@@ -34,6 +37,7 @@ struct TerminalView: View {
 
                 Button(role: .destructive) {
                     bleManager.receivedMessages.removeAll()
+                    lastScrolledCount = 0
                 } label: {
                     Label("クリア", systemImage: "trash")
                         .font(.caption)
@@ -70,12 +74,13 @@ struct TerminalView: View {
                     }
                     .padding(.vertical, 4)
                 }
-                .onChange(of: bleManager.receivedMessages.count) { _ in
-                    if autoScroll, let last = bleManager.receivedMessages.last {
-                        withAnimation(.none) {
-                            proxy.scrollTo(last.id, anchor: .bottom)
-                        }
-                    }
+                .onChange(of: bleManager.receivedMessages.count) { newCount in
+                    // 行数が変わっていない場合や自動スクロールOFFの場合はスキップ
+                    guard autoScroll, newCount != lastScrolledCount,
+                          let last = bleManager.receivedMessages.last else { return }
+                    lastScrolledCount = newCount
+                    // アニメーションなしでスクロール（CPUコスト削減）
+                    proxy.scrollTo(last.id, anchor: .bottom)
                 }
             }
             .background(Color(UIColor.systemBackground))

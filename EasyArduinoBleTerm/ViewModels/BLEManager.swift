@@ -3,9 +3,9 @@ import CoreBluetooth
 import Combine
 
 // Nordic UART Service UUIDs (ESP32_BleSerial default)
-let NORDIC_SERVICE_UUID    = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
-let NORDIC_RX_UUID         = CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E") // Write (phone -> device)
-let NORDIC_TX_UUID         = CBUUID(string: "6E400003-B5A3-F393-E0A9-E50E24DCCA9E") // Notify (device -> phone)
+let NORDIC_SERVICE_UUID = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
+let NORDIC_RX_UUID      = CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E") // Write (phone -> device)
+let NORDIC_TX_UUID      = CBUUID(string: "6E400003-B5A3-F393-E0A9-E50E24DCCA9E") // Notify (device -> phone)
 
 struct DiscoveredPeripheral: Identifiable, Equatable {
     let id: UUID
@@ -25,6 +25,7 @@ struct ReceivedMessage: Identifiable {
 }
 
 class BLEManager: NSObject, ObservableObject {
+
     // MARK: - Published State
     @Published var isScanning: Bool = false
     @Published var discoveredPeripherals: [DiscoveredPeripheral] = []
@@ -39,7 +40,15 @@ class BLEManager: NSObject, ObservableObject {
     private var rxCharacteristic: CBCharacteristic?
     private var receiveBuffer: String = ""
 
+    // ターミナル表示の上限行数
     private let maxMessages = 2000
+
+    // 受信メッセージのバッチ蓄積バッファ（UI更新を間引くため）
+    private var pendingMessages: [ReceivedMessage] = []
+
+    // UIへの反映タイマー: 最大20fps に制限
+    private var uiFlushTimer: Timer?
+    private let uiFlushInterval: TimeInterval = 1.0 / 20.0
 
     // Callbacks for ViewModels
     var onDataReceived: ((String, Date) -> Void)?
@@ -51,9 +60,36 @@ class BLEManager: NSObject, ObservableObject {
         case failed(String)
     }
 
+    // MARK: - Init / Deinit
+
     override init() {
         super.init()
         centralManager = CBCentralManager(delegate: self, queue: DispatchQueue.main)
+        startUIFlushTimer()
+    }
+
+    deinit {
+        uiFlushTimer?.invalidate()
+    }
+
+    // MARK: - UI Flush Timer
+
+    private func startUIFlushTimer() {
+        uiFlushTimer = Timer.scheduledTimer(withTimeInterval: uiFlushInterval, repeats: true) { [weak self] _ in
+            self?.flushPendingMessages()
+        }
+        RunLoop.main.add(uiFlushTimer!, forMode: .common)
+    }
+
+    /// pendingMessages を receivedMessages に一括反映する
+    private func flushPendingMessages() {
+        guard !pendingMessages.isEmpty else { return }
+        receivedMessages.append(contentsOf: pendingMessages)
+        pendingMessages.removeAll()
+        // 上限を超えた古いメッセージを削除
+        if receivedMessages.count > maxMessages {
+            receivedMessages.removeFirst(receivedMessages.count - maxMessages)
+        }
     }
 
     // MARK: - Public API
@@ -62,7 +98,10 @@ class BLEManager: NSObject, ObservableObject {
         guard centralManager.state == .poweredOn else { return }
         discoveredPeripherals.removeAll()
         isScanning = true
-        centralManager.scanForPeripherals(withServices: [NORDIC_SERVICE_UUID], options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
+        centralManager.scanForPeripherals(
+            withServices: [NORDIC_SERVICE_UUID],
+            options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
+        )
     }
 
     func stopScanning() {
@@ -93,9 +132,7 @@ class BLEManager: NSObject, ObservableObject {
 // MARK: - CBCentralManagerDelegate
 extension BLEManager: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        if central.state == .poweredOn {
-            // Ready
-        } else {
+        if central.state != .poweredOn {
             isScanning = false
             connectionState = .disconnected
         }
@@ -105,8 +142,15 @@ extension BLEManager: CBCentralManagerDelegate {
                         didDiscover peripheral: CBPeripheral,
                         advertisementData: [String: Any],
                         rssi RSSI: NSNumber) {
-        let name = peripheral.name ?? advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? "Unknown"
-        let discovered = DiscoveredPeripheral(id: peripheral.identifier, peripheral: peripheral, name: name, rssi: RSSI.intValue)
+        let name = peripheral.name
+            ?? advertisementData[CBAdvertisementDataLocalNameKey] as? String
+            ?? "Unknown"
+        let discovered = DiscoveredPeripheral(
+            id: peripheral.identifier,
+            peripheral: peripheral,
+            name: name,
+            rssi: RSSI.intValue
+        )
         if let idx = discoveredPeripherals.firstIndex(where: { $0.id == discovered.id }) {
             discoveredPeripherals[idx] = discovered
         } else {
@@ -122,13 +166,17 @@ extension BLEManager: CBCentralManagerDelegate {
         peripheral.discoverServices([NORDIC_SERVICE_UUID])
     }
 
-    func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+    func centralManager(_ central: CBCentralManager,
+                        didFailToConnect peripheral: CBPeripheral,
+                        error: Error?) {
         connectionState = .failed(error?.localizedDescription ?? "Connection failed")
         activePeripheral = nil
         connectedPeripheral = nil
     }
 
-    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+    func centralManager(_ central: CBCentralManager,
+                        didDisconnectPeripheral peripheral: CBPeripheral,
+                        error: Error?) {
         connectionState = .disconnected
         activePeripheral = nil
         connectedPeripheral = nil
@@ -141,10 +189,8 @@ extension BLEManager: CBCentralManagerDelegate {
 extension BLEManager: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         guard let services = peripheral.services else { return }
-        for service in services {
-            if service.uuid == NORDIC_SERVICE_UUID {
-                peripheral.discoverCharacteristics([NORDIC_RX_UUID, NORDIC_TX_UUID], for: service)
-            }
+        for service in services where service.uuid == NORDIC_SERVICE_UUID {
+            peripheral.discoverCharacteristics([NORDIC_RX_UUID, NORDIC_TX_UUID], for: service)
         }
     }
 
@@ -172,22 +218,19 @@ extension BLEManager: CBPeripheralDelegate {
         let now = Date()
         receiveBuffer += str
 
-        // Split by newline
+        // 改行で分割し、末尾の未完了チャンクはバッファに残す
         var lines = receiveBuffer.components(separatedBy: "\n")
-        // Keep the last incomplete chunk in the buffer
         receiveBuffer = lines.removeLast()
 
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { continue }
-            let msg = ReceivedMessage(timestamp: now, text: trimmed)
-            receivedMessages.append(msg)
-            onDataReceived?(trimmed, now)
-        }
 
-        // 2000行を超えた古いメッセージを一括削除
-        if receivedMessages.count > maxMessages {
-            receivedMessages.removeFirst(receivedMessages.count - maxMessages)
+            // ターミナル表示用にバッチ蓄積（タイマーで一括反映）
+            pendingMessages.append(ReceivedMessage(timestamp: now, text: trimmed))
+
+            // プロッターへはリアルタイムで通知
+            onDataReceived?(trimmed, now)
         }
     }
 }

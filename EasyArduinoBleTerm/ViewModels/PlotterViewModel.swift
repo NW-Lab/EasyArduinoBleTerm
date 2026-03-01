@@ -2,6 +2,8 @@ import Foundation
 import SwiftUI
 import Combine
 
+// MARK: - TimeScale
+
 /// 横軸の表示幅（秒単位）の3段階
 enum TimeScale: Double, CaseIterable, Identifiable {
     case fine   = 0.1
@@ -28,55 +30,86 @@ enum TimeScale: Double, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - YAxisMode
+
 /// 縦軸モード
-enum YAxisMode {
-    case auto    // データに合わせて自動調整
-    case fixed   // ユーザー指定の固定範囲
+enum YAxisMode: Equatable {
+    case auto
+    case fixed
 }
 
+// MARK: - PlotterViewModel
+
 class PlotterViewModel: ObservableObject {
-    // MARK: - Published
-    @Published var channels: [PlotChannel] = []
+
+    // MARK: Published (UI用スナップショット — 描画タイマーで間引いて更新)
+    @Published var channelSnapshots: [PlotChannel] = []
     @Published var timeScale: TimeScale = .medium
     @Published var yAxisMode: YAxisMode = .auto
     @Published var yFixedMin: Double = -10.0
     @Published var yFixedMax: Double = 10.0
-    @Published var pinchTimeSpan: Double = 1.0   // 現在の表示時間幅（ピンチで変更）
+    @Published var pinchTimeSpan: Double = 1.0
 
-    // MARK: - Private
+    // MARK: Private raw storage (BLEスレッドから直接書き込む)
+    private var rawChannels: [PlotChannel] = []
     private var startTime: Date? = nil
     private let maxPoints = 10000
 
-    // MARK: - Computed
+    // 描画更新タイマー: 最大30fps に制限
+    private var displayTimer: Timer?
+    private let displayInterval: TimeInterval = 1.0 / 30.0
 
-    /// 全チャンネルのうち有効なものだけ返す
-    var enabledChannels: [PlotChannel] {
-        channels.filter { $0.isEnabled }
+    // MARK: - Init / Deinit
+
+    init() {
+        startDisplayTimer()
     }
 
-    /// 現在の表示時間幅（ピンチ値とtimeScaleを組み合わせ）
-    var displayTimeSpan: Double {
-        pinchTimeSpan
+    deinit {
+        displayTimer?.invalidate()
     }
 
-    /// 最新の時刻（秒）
+    // MARK: - Display Timer
+
+    private func startDisplayTimer() {
+        displayTimer = Timer.scheduledTimer(withTimeInterval: displayInterval, repeats: true) { [weak self] _ in
+            self?.flushSnapshot()
+        }
+        // バックグラウンドでも動作するよう RunLoop に追加
+        RunLoop.main.add(displayTimer!, forMode: .common)
+    }
+
+    /// rawChannels のスナップショットを UI スレッドに反映する
+    private func flushSnapshot() {
+        // データがなければ何もしない
+        guard !rawChannels.isEmpty else { return }
+        channelSnapshots = rawChannels
+    }
+
+    // MARK: - Computed (スナップショットから計算)
+
+    var enabledSnapshots: [PlotChannel] {
+        channelSnapshots.filter { $0.isEnabled }
+    }
+
+    var displayTimeSpan: Double { pinchTimeSpan }
+
     var latestTime: Double {
-        channels.flatMap { $0.points }.map { $0.time }.max() ?? 0
+        rawChannels.flatMap { $0.points }.map { $0.time }.max() ?? 0
     }
 
-    /// 表示範囲の開始時刻
     var visibleStartTime: Double {
         max(0, latestTime - displayTimeSpan)
     }
 
-    /// 縦軸の表示範囲
     var yRange: (min: Double, max: Double) {
         switch yAxisMode {
         case .fixed:
             return (yFixedMin, yFixedMax)
         case .auto:
-            let visiblePoints = enabledChannels.flatMap { ch in
-                ch.points.filter { $0.time >= visibleStartTime }
+            let vst = visibleStartTime
+            let visiblePoints = enabledSnapshots.flatMap { ch in
+                ch.points.filter { $0.time >= vst }
             }
             guard !visiblePoints.isEmpty else { return (-1, 1) }
             let minV = visiblePoints.map { $0.value }.min()!
@@ -88,51 +121,60 @@ class PlotterViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Data Ingestion
+    // MARK: - Data Ingestion (BLEコールバックから呼ばれる)
 
     /// BLEで受信した1行のデータを解析してチャンネルに追加する
+    /// メインスレッドから呼ばれることを前提とする
     func processLine(_ line: String, timestamp: Date) {
         let parts = line.components(separatedBy: ",")
         let values = parts.compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
         guard !values.isEmpty else { return }
 
-        // 開始時刻を記録
-        if startTime == nil {
-            startTime = timestamp
-        }
+        if startTime == nil { startTime = timestamp }
         let elapsed = timestamp.timeIntervalSince(startTime!)
 
-        // チャンネル数を動的に拡張（最大5）
         let needed = min(values.count, 5)
-        while channels.count < needed {
-            channels.append(PlotChannel(id: channels.count))
+        while rawChannels.count < needed {
+            let newCh = PlotChannel(id: rawChannels.count)
+            rawChannels.append(newCh)
         }
 
         for (i, value) in values.prefix(5).enumerated() {
             let point = PlotPoint(time: elapsed, value: value)
-            channels[i].points.append(point)
-            // 古いデータを削除してメモリ節約
-            if channels[i].points.count > maxPoints {
-                channels[i].points.removeFirst(channels[i].points.count - maxPoints)
+            rawChannels[i].points.append(point)
+            if rawChannels[i].points.count > maxPoints {
+                rawChannels[i].points.removeFirst(rawChannels[i].points.count - maxPoints)
             }
         }
     }
 
-    func clearData() {
-        for i in channels.indices {
-            channels[i].points.removeAll()
+    // MARK: - Channel Toggle (UIから呼ばれる)
+
+    func toggleChannel(_ id: Int) {
+        if let idx = rawChannels.firstIndex(where: { $0.id == id }) {
+            rawChannels[idx].isEnabled.toggle()
         }
-        startTime = nil
+        // 即座にスナップショットへ反映
+        flushSnapshot()
     }
 
-    /// ピンチ操作で表示時間幅を変更する
+    // MARK: - Clear
+
+    func clearData() {
+        for i in rawChannels.indices {
+            rawChannels[i].points.removeAll()
+        }
+        startTime = nil
+        channelSnapshots = rawChannels
+    }
+
+    // MARK: - Zoom
+
     func applyPinch(scale: CGFloat) {
         let newSpan = pinchTimeSpan / Double(scale)
-        // 0.05秒〜300秒の範囲でクランプ
         pinchTimeSpan = min(max(newSpan, 0.05), 300.0)
     }
 
-    /// タイムスケールプリセットを適用する
     func applyTimeScale(_ scale: TimeScale) {
         timeScale = scale
         pinchTimeSpan = scale.rawValue
