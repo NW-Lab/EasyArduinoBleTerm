@@ -39,6 +39,8 @@ class BLEManager: NSObject, ObservableObject {
     private var rxCharacteristic: CBCharacteristic?
     private var receiveBuffer: String = ""
 
+    private let maxMessages = 2000
+
     // Callbacks for ViewModels
     var onDataReceived: ((String, Date) -> Void)?
 
@@ -180,11 +182,12 @@ extension BLEManager: CBPeripheralDelegate {
             guard !trimmed.isEmpty else { continue }
             let msg = ReceivedMessage(timestamp: now, text: trimmed)
             receivedMessages.append(msg)
-            // Keep last 2000 messages
-            if receivedMessages.count > 2000 {
-                receivedMessages.removeFirst(receivedMessages.count - 2000)
-            }
             onDataReceived?(trimmed, now)
+        }
+
+        // 2000行を超えた古いメッセージを一括削除
+        if receivedMessages.count > maxMessages {
+            receivedMessages.removeFirst(receivedMessages.count - maxMessages)
         }
     }
 }
