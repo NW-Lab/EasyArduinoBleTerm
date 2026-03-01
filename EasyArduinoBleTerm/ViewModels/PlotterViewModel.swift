@@ -195,6 +195,21 @@ class PlotterViewModel: ObservableObject {
         pinchTimeSpan = scale.rawValue
     }
 
+    // MARK: - Y Axis Mode Toggle
+
+    /// 縦軸モードをトグルする。自動→固定の際は現在の yRange を固定値として引き継ぐ。
+    func toggleYAxisMode() {
+        switch yAxisMode {
+        case .auto:
+            let r = yRange
+            yFixedMin = r.min
+            yFixedMax = r.max
+            yAxisMode = .fixed
+        case .fixed:
+            yAxisMode = .auto
+        }
+    }
+
     // MARK: - Y Axis Pinch (縦軸)
 
     /// 縦軸のピンチ操作: 現在の中心を保ったまま表示範囲を拡大縮小する。
