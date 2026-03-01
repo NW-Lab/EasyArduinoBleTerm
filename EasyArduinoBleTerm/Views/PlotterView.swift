@@ -448,16 +448,6 @@ struct PlotterView: View {
                     .overlay(
                         // 縦軸ピンチ用の透明ビュー（左側Y軸ラベル領域に配置）
                         YAxisPinchOverlay(
-                            onPinchChanged: { scale in
-                                let center = (pinchStartYMin + pinchStartYMax) / 2
-                                let halfSpan = (pinchStartYMax - pinchStartYMin) / 2
-                                let newHalf = min(max(halfSpan / Double(scale), 1e-6), 1e9)
-                                vm.yFixedMin = center - newHalf
-                                vm.yFixedMax = center + newHalf
-                                if vm.yAxisMode == .auto {
-                                    vm.yAxisMode = .fixed
-                                }
-                            },
                             onPinchBegan: {
                                 // 開始時に現在の縦軸範囲を記録
                                 let r = vm.yRange
@@ -466,6 +456,16 @@ struct PlotterView: View {
                                 if vm.yAxisMode == .auto {
                                     vm.yFixedMin = r.min
                                     vm.yFixedMax = r.max
+                                    vm.yAxisMode = .fixed
+                                }
+                            },
+                            onPinchChanged: { scale in
+                                let center = (pinchStartYMin + pinchStartYMax) / 2
+                                let halfSpan = (pinchStartYMax - pinchStartYMin) / 2
+                                let newHalf = min(max(halfSpan / Double(scale), 1e-6), 1e9)
+                                vm.yFixedMin = center - newHalf
+                                vm.yFixedMax = center + newHalf
+                                if vm.yAxisMode == .auto {
                                     vm.yAxisMode = .fixed
                                 }
                             },
