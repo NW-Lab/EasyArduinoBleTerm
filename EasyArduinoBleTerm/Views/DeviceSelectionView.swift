@@ -99,20 +99,16 @@ struct DeviceSelectionView: View {
     }
 
     private func rssiIcon(_ rssi: Int) -> String {
-        switch rssi {
-        case -60...: return "wifi"
-        case -75..<(-60): return "wifi"
-        case -90..<(-75): return "wifi"
-        default: return "wifi.slash"
-        }
+        if rssi >= -60 { return "wifi" }
+        if rssi >= -75 { return "wifi" }
+        if rssi >= -90 { return "wifi" }
+        return "wifi.slash"
     }
 
     private func rssiColor(_ rssi: Int) -> Color {
-        switch rssi {
-        case -60...: return .green
-        case -75..<(-60): return .yellow
-        case -90..<(-75): return .orange
-        default: return .red
-        }
+        if rssi >= -60 { return .green }
+        if rssi >= -75 { return .yellow }
+        if rssi >= -90 { return .orange }
+        return .red
     }
 }
