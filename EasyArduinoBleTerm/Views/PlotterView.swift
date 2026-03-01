@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - Channel Color Helper
 extension PlotChannelColor {
@@ -39,7 +40,6 @@ struct GraphCanvas: View {
             let firstGrid = (visibleStartTime / gridInterval).rounded(.up) * gridInterval
             var t = firstGrid
             let endT = visibleStartTime + displayTimeSpan
-            // 最大グリッド線数を制限して無限ループを防止
             let maxGridLines = Int(displayTimeSpan / gridInterval) + 2
             var gridCount = 0
             while t <= endT + gridInterval * 0.001 && gridCount < maxGridLines {
@@ -124,9 +124,23 @@ struct YAxisLabels: View {
 struct TimeScaleOverlay: View {
     let displayTimeSpan: Double
     let gridInterval: Double
+    let isPinching: Bool
 
     var body: some View {
         VStack {
+            if isPinching {
+                HStack {
+                    Text("ピンチ操作中")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.orange)
+                        .padding(4)
+                        .background(Color(UIColor.systemBackground).opacity(0.85))
+                        .cornerRadius(4)
+                        .padding(.leading, 6)
+                        .padding(.top, 4)
+                    Spacer()
+                }
+            }
             Spacer()
             HStack {
                 Spacer()
@@ -147,8 +161,6 @@ struct TimeScaleOverlay: View {
 }
 
 // MARK: - Channel Selector
-/// Bindingを使わず vm.toggleChannel() 経由で変更することで
-/// channels 配列全体の再評価による無限再描画を防止する
 struct ChannelSelectorView: View {
     let channels: [PlotChannel]
     let onToggle: (Int) -> Void
@@ -252,66 +264,82 @@ struct YAxisSettingsSheet: View {
     }
 }
 
-// MARK: - Y Axis Pinch Overlay
-/// Y軸ラベル領域に重ねる透明ビュー。
-/// UIKitのUIPinchGestureRecognizerを使って上下方向のピンチを検出する。
-struct YAxisPinchOverlay: UIViewRepresentable {
-    var onPinchBegan: () -> Void
-    var onPinchChanged: (CGFloat) -> Void
-    var onPinchEnded: () -> Void
+// MARK: - Dual Axis Pinch View
+/// グラフ全体を覆う UIViewRepresentable。
+/// UIPinchGestureRecognizer で2本指の距離変化を検出し、
+/// 水平方向 → 横軸（時間幅）、垂直方向 → 縦軸（値の範囲）を独立制御する。
+struct DualAxisPinchView: UIViewRepresentable {
+    var onBegan: () -> Void
+    var onChanged: (_ hScale: CGFloat, _ vScale: CGFloat) -> Void
+    var onEnded: () -> Void
 
     func makeUIView(context: Context) -> UIView {
         let view = UIView()
         view.backgroundColor = .clear
-        let recognizer = UIPinchGestureRecognizer(
+        // ユーザーインタラクションを有効化
+        view.isUserInteractionEnabled = true
+        let pinch = UIPinchGestureRecognizer(
             target: context.coordinator,
             action: #selector(Coordinator.handlePinch(_:))
         )
-        view.addGestureRecognizer(recognizer)
+        view.addGestureRecognizer(pinch)
         return view
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        context.coordinator.onPinchBegan = onPinchBegan
-        context.coordinator.onPinchChanged = onPinchChanged
-        context.coordinator.onPinchEnded = onPinchEnded
+        context.coordinator.onBegan   = onBegan
+        context.coordinator.onChanged = onChanged
+        context.coordinator.onEnded   = onEnded
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(
-            onPinchBegan: onPinchBegan,
-            onPinchChanged: onPinchChanged,
-            onPinchEnded: onPinchEnded
-        )
+        Coordinator(onBegan: onBegan, onChanged: onChanged, onEnded: onEnded)
     }
 
     class Coordinator: NSObject {
-        var onPinchBegan: () -> Void
-        var onPinchChanged: (CGFloat) -> Void
-        var onPinchEnded: () -> Void
+        var onBegan:   () -> Void
+        var onChanged: (CGFloat, CGFloat) -> Void
+        var onEnded:   () -> Void
 
-        // ピンチ開始時のスケール基準値
-        private var baseScale: CGFloat = 1.0
+        // ピンチ開始時の2本指間の水平・垂直距離
+        private var startHDist: CGFloat = 1
+        private var startVDist: CGFloat = 1
 
-        init(onPinchBegan: @escaping () -> Void,
-             onPinchChanged: @escaping (CGFloat) -> Void,
-             onPinchEnded: @escaping () -> Void) {
-            self.onPinchBegan = onPinchBegan
-            self.onPinchChanged = onPinchChanged
-            self.onPinchEnded = onPinchEnded
+        init(onBegan: @escaping () -> Void,
+             onChanged: @escaping (CGFloat, CGFloat) -> Void,
+             onEnded: @escaping () -> Void) {
+            self.onBegan   = onBegan
+            self.onChanged = onChanged
+            self.onEnded   = onEnded
         }
 
-        @objc func handlePinch(_ recognizer: UIPinchGestureRecognizer) {
-            switch recognizer.state {
+        @objc func handlePinch(_ r: UIPinchGestureRecognizer) {
+            guard r.numberOfTouches == 2,
+                  let view = r.view else {
+                if r.state == .ended || r.state == .cancelled { onEnded() }
+                return
+            }
+
+            let p0 = r.location(ofTouch: 0, in: view)
+            let p1 = r.location(ofTouch: 1, in: view)
+
+            switch r.state {
             case .began:
-                baseScale = 1.0
-                onPinchBegan()
+                startHDist = max(abs(p0.x - p1.x), 1)
+                startVDist = max(abs(p0.y - p1.y), 1)
+                onBegan()
+
             case .changed:
-                // recognizer.scaleは開始からの累積スケール
-                onPinchChanged(recognizer.scale)
+                let hDist = max(abs(p0.x - p1.x), 1)
+                let vDist = max(abs(p0.y - p1.y), 1)
+                // 開始時からの倍率: >1 で広がった（ズームイン方向）
+                let hScale = hDist / startHDist
+                let vScale = vDist / startVDist
+                onChanged(hScale, vScale)
+
             case .ended, .cancelled:
-                onPinchEnded()
-                recognizer.scale = 1.0
+                onEnded()
+
             default:
                 break
             }
@@ -324,10 +352,11 @@ struct PlotterView: View {
     @ObservedObject var vm: PlotterViewModel
     @State private var showYSettings: Bool = false
 
-    // ピンチ開始時の初期値を保持（ジェスチャー中のリアルタイムプレビュー用）
+    // ピンチ開始時の初期値（ジェスチャー中のリアルタイム計算用）
     @State private var pinchStartTimeSpan: Double = 1.0
     @State private var pinchStartYMin: Double = -10.0
     @State private var pinchStartYMax: Double = 10.0
+    @State private var isPinching: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -368,7 +397,7 @@ struct PlotterView: View {
 
             Divider()
 
-            // Channel selector (スナップショットを使用)
+            // Channel selector
             if !vm.channelSnapshots.isEmpty {
                 ChannelSelectorView(
                     channels: vm.channelSnapshots,
@@ -400,7 +429,7 @@ struct PlotterView: View {
                     // Y axis labels
                     YAxisLabels(yMin: vm.yRange.min, yMax: vm.yRange.max)
 
-                    // Graph canvas + pinch gesture
+                    // Graph canvas
                     ZStack {
                         GraphCanvas(
                             channels: vm.channelSnapshots,
@@ -413,70 +442,48 @@ struct PlotterView: View {
 
                         TimeScaleOverlay(
                             displayTimeSpan: vm.displayTimeSpan,
-                            gridInterval: vm.timeScale.gridInterval
+                            gridInterval: vm.timeScale.gridInterval,
+                            isPinching: isPinching
                         )
 
-                        // 縦軸操作中のヒントオーバーレイ
-                        if vm.yAxisMode == .fixed {
-                            VStack {
-                                HStack {
-                                    Spacer()
-                                    Image(systemName: "arrow.up.and.down.and.sparkles")
-                                        .font(.system(size: 11))
-                                        .foregroundColor(.secondary.opacity(0.6))
-                                        .padding(.trailing, 6)
-                                        .padding(.top, 4)
-                                }
-                                Spacer()
-                            }
-                        }
-                    }
-                    .gesture(
-                        // ピンチ開始時に初期値を記録し、リアルタイムで反映
-                        MagnificationGesture()
-                            .onChanged { scale in
-                                // リアルタイムプレビュー: 開始値から直接計算
-                                let newTimeSpan = pinchStartTimeSpan / Double(scale)
-                                vm.pinchTimeSpan = min(max(newTimeSpan, 0.05), 300.0)
-                            }
-                            .onEnded { _ in
-                                // 終了時に現在値を次回の開始値として保存
+                        // ピンチジェスチャー受付レイヤー（グラフ全体を覆う）
+                        DualAxisPinchView(
+                            onBegan: {
+                                // 開始時の値を記録
                                 pinchStartTimeSpan = vm.pinchTimeSpan
-                            }
-                    )
-                    .clipped()
-                    .overlay(
-                        // 縦軸ピンチ用の透明ビュー（左側Y軸ラベル領域に配置）
-                        YAxisPinchOverlay(
-                            onPinchBegan: {
-                                // 開始時に現在の縦軸範囲を記録
                                 let r = vm.yRange
                                 pinchStartYMin = r.min
                                 pinchStartYMax = r.max
+                                // 自動モードなら固定モードに切り替え
                                 if vm.yAxisMode == .auto {
                                     vm.yFixedMin = r.min
                                     vm.yFixedMax = r.max
                                     vm.yAxisMode = .fixed
                                 }
+                                // 描画タイマーを一時停止
+                                vm.pauseDisplay()
+                                isPinching = true
                             },
-                            onPinchChanged: { scale in
-                                let center = (pinchStartYMin + pinchStartYMax) / 2
+                            onChanged: { hScale, vScale in
+                                // 横軸: 水平距離が広がった(hScale>1) → 時間幅を縮小（ズームイン）
+                                let newSpan = pinchStartTimeSpan / Double(hScale)
+                                vm.pinchTimeSpan = min(max(newSpan, 0.05), 300.0)
+
+                                // 縦軸: 垂直距離が広がった(vScale>1) → Y範囲を縮小（ズームイン）
+                                let center   = (pinchStartYMin + pinchStartYMax) / 2
                                 let halfSpan = (pinchStartYMax - pinchStartYMin) / 2
-                                let newHalf = min(max(halfSpan / Double(scale), 1e-6), 1e9)
+                                let newHalf  = min(max(halfSpan / Double(vScale), 1e-6), 1e9)
                                 vm.yFixedMin = center - newHalf
                                 vm.yFixedMax = center + newHalf
-                                if vm.yAxisMode == .auto {
-                                    vm.yAxisMode = .fixed
-                                }
                             },
-                            onPinchEnded: {
-                                pinchStartYMin = vm.yFixedMin
-                                pinchStartYMax = vm.yFixedMax
+                            onEnded: {
+                                // 描画タイマーを再開
+                                vm.resumeDisplay()
+                                isPinching = false
                             }
                         )
-                        .frame(width: 54), // Y軸ラベル幅に合わせる
-                        alignment: .leading
-                    )
+                    }
+                    .clipped()
                 }
             }
         }

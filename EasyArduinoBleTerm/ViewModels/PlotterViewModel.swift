@@ -71,6 +71,8 @@ class PlotterViewModel: ObservableObject {
 
     // MARK: - Display Timer
 
+    private var isDisplayPaused = false
+
     private func startDisplayTimer() {
         displayTimer = Timer.scheduledTimer(withTimeInterval: displayInterval, repeats: true) { [weak self] _ in
             self?.flushSnapshot()
@@ -81,9 +83,22 @@ class PlotterViewModel: ObservableObject {
 
     /// rawChannels のスナップショットを UI スレッドに反映する
     private func flushSnapshot() {
-        // データがなければ何もしない
-        guard !rawChannels.isEmpty else { return }
+        guard !rawChannels.isEmpty, !isDisplayPaused else { return }
         channelSnapshots = rawChannels
+    }
+
+    /// ピンチ操作中に描画更新を一時停止する
+    func pauseDisplay() {
+        isDisplayPaused = true
+    }
+
+    /// ピンチ操作終了後に描画更新を再開する
+    func resumeDisplay() {
+        isDisplayPaused = false
+        // 再開直後に最新スナップショットを即時反映
+        if !rawChannels.isEmpty {
+            channelSnapshots = rawChannels
+        }
     }
 
     // MARK: - Computed (スナップショットから計算)
