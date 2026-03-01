@@ -1,0 +1,49 @@
+# Xcode
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+DerivedData/
+build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# CocoaPods
+Pods/
+Podfile.lock
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Xcode user settings
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+
+# Playgrounds
+timeline.xctimeline
+playground.xcworkspace
+
+# Swift Playgrounds
+*.playground/
+
+# Instruments
+*.trace
+
+# Crashlytics
+crashlytics-build.properties
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# Environment
+.env
