@@ -69,40 +69,45 @@ struct ContentView: View {
     private var connectionStatusView: some View {
         switch bleManager.connectionState {
         case .connected:
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
                 Circle()
                     .fill(.green)
-                    .frame(width: 8, height: 8)
+                    .frame(width: 10, height: 10)
                 Text("接続中")
-                    .font(.caption)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
                     .foregroundColor(.green)
             }
+            .frame(minWidth: 80, alignment: .leading)
         case .connecting:
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
                 ProgressView()
-                    .scaleEffect(0.7)
+                    .scaleEffect(0.8)
                 Text("接続中...")
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundColor(.orange)
             }
+            .frame(minWidth: 80, alignment: .leading)
         case .disconnected:
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
                 Circle()
                     .fill(.gray)
-                    .frame(width: 8, height: 8)
+                    .frame(width: 10, height: 10)
                 Text("未接続")
-                    .font(.caption)
-                    .foregroundColor(.gray)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
             }
+            .frame(minWidth: 80, alignment: .leading)
         case .failed(let msg):
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
                 Circle()
                     .fill(.red)
-                    .frame(width: 8, height: 8)
+                    .frame(width: 10, height: 10)
                 Text("エラー")
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundColor(.red)
             }
+            .frame(minWidth: 80, alignment: .leading)
             .help(msg)
         }
     }
