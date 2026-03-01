@@ -168,7 +168,7 @@ class PlotterViewModel: ObservableObject {
         channelSnapshots = rawChannels
     }
 
-    // MARK: - Zoom
+    // MARK: - Zoom (横軸)
 
     func applyPinch(scale: CGFloat) {
         let newSpan = pinchTimeSpan / Double(scale)
@@ -178,5 +178,26 @@ class PlotterViewModel: ObservableObject {
     func applyTimeScale(_ scale: TimeScale) {
         timeScale = scale
         pinchTimeSpan = scale.rawValue
+    }
+
+    // MARK: - Y Axis Pinch (縦軸)
+
+    /// 縦軸のピンチ操作: 現在の中心を保ったまま表示範囲を拡大縮小する。
+    /// 自動モードの場合は固定モードに切り替えてから操作する。
+    func applyYPinch(scale: CGFloat) {
+        // 自動モードなら現在の yRange を固定値として取り込んでから固定モードへ
+        if yAxisMode == .auto {
+            let r = yRange
+            yFixedMin = r.min
+            yFixedMax = r.max
+            yAxisMode = .fixed
+        }
+        let center = (yFixedMin + yFixedMax) / 2
+        let halfSpan = (yFixedMax - yFixedMin) / 2
+        // scale > 1 でピンチアウト（拡大）→ 範囲を縮小、scale < 1 でピンチイン（縮小）→ 範囲を拡大
+        let newHalf = halfSpan / Double(scale)
+        let clamped = min(max(newHalf, 1e-6), 1e9)
+        yFixedMin = center - clamped
+        yFixedMax = center + clamped
     }
 }

@@ -252,10 +252,82 @@ struct YAxisSettingsSheet: View {
     }
 }
 
+// MARK: - Y Axis Pinch Overlay
+/// Y軸ラベル領域に重ねる透明ビュー。
+/// UIKitのUIPinchGestureRecognizerを使って上下方向のピンチを検出する。
+struct YAxisPinchOverlay: UIViewRepresentable {
+    var onPinchBegan: () -> Void
+    var onPinchChanged: (CGFloat) -> Void
+    var onPinchEnded: () -> Void
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+        let recognizer = UIPinchGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handlePinch(_:))
+        )
+        view.addGestureRecognizer(recognizer)
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.onPinchBegan = onPinchBegan
+        context.coordinator.onPinchChanged = onPinchChanged
+        context.coordinator.onPinchEnded = onPinchEnded
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(
+            onPinchBegan: onPinchBegan,
+            onPinchChanged: onPinchChanged,
+            onPinchEnded: onPinchEnded
+        )
+    }
+
+    class Coordinator: NSObject {
+        var onPinchBegan: () -> Void
+        var onPinchChanged: (CGFloat) -> Void
+        var onPinchEnded: () -> Void
+
+        // ピンチ開始時のスケール基準値
+        private var baseScale: CGFloat = 1.0
+
+        init(onPinchBegan: @escaping () -> Void,
+             onPinchChanged: @escaping (CGFloat) -> Void,
+             onPinchEnded: @escaping () -> Void) {
+            self.onPinchBegan = onPinchBegan
+            self.onPinchChanged = onPinchChanged
+            self.onPinchEnded = onPinchEnded
+        }
+
+        @objc func handlePinch(_ recognizer: UIPinchGestureRecognizer) {
+            switch recognizer.state {
+            case .began:
+                baseScale = 1.0
+                onPinchBegan()
+            case .changed:
+                // recognizer.scaleは開始からの累積スケール
+                onPinchChanged(recognizer.scale)
+            case .ended, .cancelled:
+                onPinchEnded()
+                recognizer.scale = 1.0
+            default:
+                break
+            }
+        }
+    }
+}
+
 // MARK: - Main PlotterView
 struct PlotterView: View {
     @ObservedObject var vm: PlotterViewModel
     @State private var showYSettings: Bool = false
+
+    // ピンチ開始時の初期値を保持（ジェスチャー中のリアルタイムプレビュー用）
+    @State private var pinchStartTimeSpan: Double = 1.0
+    @State private var pinchStartYMin: Double = -10.0
+    @State private var pinchStartYMax: Double = 10.0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -343,14 +415,68 @@ struct PlotterView: View {
                             displayTimeSpan: vm.displayTimeSpan,
                             gridInterval: vm.timeScale.gridInterval
                         )
+
+                        // 縦軸操作中のヒントオーバーレイ
+                        if vm.yAxisMode == .fixed {
+                            VStack {
+                                HStack {
+                                    Spacer()
+                                    Image(systemName: "arrow.up.and.down.and.sparkles")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.secondary.opacity(0.6))
+                                        .padding(.trailing, 6)
+                                        .padding(.top, 4)
+                                }
+                                Spacer()
+                            }
+                        }
                     }
                     .gesture(
+                        // ピンチ開始時に初期値を記録し、リアルタイムで反映
                         MagnificationGesture()
-                            .onEnded { scale in
-                                vm.applyPinch(scale: scale)
+                            .onChanged { scale in
+                                // リアルタイムプレビュー: 開始値から直接計算
+                                let newTimeSpan = pinchStartTimeSpan / Double(scale)
+                                vm.pinchTimeSpan = min(max(newTimeSpan, 0.05), 300.0)
+                            }
+                            .onEnded { _ in
+                                // 終了時に現在値を次回の開始値として保存
+                                pinchStartTimeSpan = vm.pinchTimeSpan
                             }
                     )
                     .clipped()
+                    .overlay(
+                        // 縦軸ピンチ用の透明ビュー（左側Y軸ラベル領域に配置）
+                        YAxisPinchOverlay(
+                            onPinchChanged: { scale in
+                                let center = (pinchStartYMin + pinchStartYMax) / 2
+                                let halfSpan = (pinchStartYMax - pinchStartYMin) / 2
+                                let newHalf = min(max(halfSpan / Double(scale), 1e-6), 1e9)
+                                vm.yFixedMin = center - newHalf
+                                vm.yFixedMax = center + newHalf
+                                if vm.yAxisMode == .auto {
+                                    vm.yAxisMode = .fixed
+                                }
+                            },
+                            onPinchBegan: {
+                                // 開始時に現在の縦軸範囲を記録
+                                let r = vm.yRange
+                                pinchStartYMin = r.min
+                                pinchStartYMax = r.max
+                                if vm.yAxisMode == .auto {
+                                    vm.yFixedMin = r.min
+                                    vm.yFixedMax = r.max
+                                    vm.yAxisMode = .fixed
+                                }
+                            },
+                            onPinchEnded: {
+                                pinchStartYMin = vm.yFixedMin
+                                pinchStartYMax = vm.yFixedMax
+                            }
+                        )
+                        .frame(width: 54), // Y軸ラベル幅に合わせる
+                        alignment: .leading
+                    )
                 }
             }
         }
