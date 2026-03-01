@@ -225,6 +225,8 @@ struct GraphInteractionView: UIViewRepresentable {
             target: context.coordinator,
             action: #selector(Coordinator.handlePinch(_:))
         )
+        // delegateを設定することで shouldRecognizeSimultaneouslyWith が呼ばれる
+        pinch.delegate = context.coordinator
         view.addGestureRecognizer(pinch)
 
         let pan = UIPanGestureRecognizer(
@@ -233,8 +235,8 @@ struct GraphInteractionView: UIViewRepresentable {
         )
         pan.minimumNumberOfTouches = 2
         pan.maximumNumberOfTouches = 2
-        // ピンチと同時認識を許可
-        pinch.require(toFail: pan)
+        pan.delegate = context.coordinator
+        // require(toFail:) は使わない—ピンチがパンの失敗を待つことになり動作しなくなるため
         view.addGestureRecognizer(pan)
 
         context.coordinator.pinchRecognizer = pinch
@@ -303,26 +305,35 @@ struct GraphInteractionView: UIViewRepresentable {
         }
 
         @objc func handlePinch(_ r: UIPinchGestureRecognizer) {
-            guard r.numberOfTouches == 2, let view = r.view else {
-                if r.state == .ended || r.state == .cancelled { onPinchEnded() }
-                return
-            }
-            let p0 = r.location(ofTouch: 0, in: view)
-            let p1 = r.location(ofTouch: 1, in: view)
-
             switch r.state {
             case .began:
-                startHDist = max(abs(p0.x - p1.x), 1)
-                startVDist = max(abs(p0.y - p1.y), 1)
+                // .began時は numberOfTouches が 1 の場合もあるので、初期値はデフォルトで記録しておく
+                startHDist = 1
+                startVDist = 1
+                if r.numberOfTouches == 2, let view = r.view {
+                    let p0 = r.location(ofTouch: 0, in: view)
+                    let p1 = r.location(ofTouch: 1, in: view)
+                    startHDist = max(abs(p0.x - p1.x), 1)
+                    startVDist = max(abs(p0.y - p1.y), 1)
+                }
                 onPinchBegan()
+
             case .changed:
+                guard r.numberOfTouches == 2, let view = r.view else { return }
+                let p0 = r.location(ofTouch: 0, in: view)
+                let p1 = r.location(ofTouch: 1, in: view)
                 let hDist  = max(abs(p0.x - p1.x), 1)
                 let vDist  = max(abs(p0.y - p1.y), 1)
+                // 開始時の距離が小さすぎる場合は今の値で上書きして安定させる
+                if startHDist < 2 { startHDist = hDist }
+                if startVDist < 2 { startVDist = vDist }
                 let hScale = hDist / startHDist   // >1 = 広がった
                 let vScale = vDist / startVDist
                 onPinchChanged(hScale, vScale)
+
             case .ended, .cancelled:
                 onPinchEnded()
+
             default:
                 break
             }
