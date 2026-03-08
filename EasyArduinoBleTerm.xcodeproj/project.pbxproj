@@ -3,32 +3,35 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 70;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		A001 /* EasyArduinoBleTermApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F001 /* EasyArduinoBleTermApp.swift */; };
-		A002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F002 /* ContentView.swift */; };
-		A003 /* BLEManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F003 /* BLEManager.swift */; };
-		A004 /* PlotterViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F004 /* PlotterViewModel.swift */; };
-		A005 /* TerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F005 /* TerminalView.swift */; };
-		A006 /* PlotterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F006 /* PlotterView.swift */; };
-		A007 /* DeviceSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F007 /* DeviceSelectionView.swift */; };
-		A008 /* PlotData.swift in Sources */ = {isa = PBXBuildFile; fileRef = F008 /* PlotData.swift */; };
-/* End PBXBuildFile section */
-
 /* Begin PBXFileReference section */
-		F001 /* EasyArduinoBleTermApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EasyArduinoBleTermApp.swift; sourceTree = "<group>"; };
-		F002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		F003 /* BLEManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BLEManager.swift; sourceTree = "<group>"; };
-		F004 /* PlotterViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlotterViewModel.swift; sourceTree = "<group>"; };
-		F005 /* TerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalView.swift; sourceTree = "<group>"; };
-		F006 /* PlotterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlotterView.swift; sourceTree = "<group>"; };
-		F007 /* DeviceSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceSelectionView.swift; sourceTree = "<group>"; };
-		F008 /* PlotData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlotData.swift; sourceTree = "<group>"; };
-		F009 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		PROD /* EasyArduinoBleTerm.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EasyArduinoBleTerm.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		22386F0A2F54873600968CB1 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Assets.xcassets,
+				EasyArduinoBleTermApp.swift,
+				Localizable.xcstrings,
+				Models/PlotData.swift,
+				ViewModels/BLEManager.swift,
+				ViewModels/PlotterViewModel.swift,
+				Views/ContentView.swift,
+				Views/DeviceSelectionView.swift,
+				Views/PlotterView.swift,
+				Views/TerminalView.swift,
+			);
+			target = TARGET /* EasyArduinoBleTerm */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		22386F012F54873600968CB1 /* EasyArduinoBleTerm */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (22386F0A2F54873600968CB1 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = EasyArduinoBleTerm; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		BLDFRM /* Frameworks */ = {
@@ -41,10 +44,10 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		MAINGRP /* EasyArduinoBleTerm */ = {
+		MAINGRP = {
 			isa = PBXGroup;
 			children = (
-				APPGRP /* EasyArduinoBleTerm */,
+				22386F012F54873600968CB1 /* EasyArduinoBleTerm */,
 				PRODGRP /* Products */,
 			);
 			sourceTree = "<group>";
@@ -55,46 +58,6 @@
 				PROD /* EasyArduinoBleTerm.app */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		APPGRP /* EasyArduinoBleTerm */ = {
-			isa = PBXGroup;
-			children = (
-				F001 /* EasyArduinoBleTermApp.swift */,
-				F009 /* Info.plist */,
-				VIEWSGRP /* Views */,
-				VMGRP /* ViewModels */,
-				MODELSGRP /* Models */,
-			);
-			path = EasyArduinoBleTerm;
-			sourceTree = "<group>";
-		};
-		VIEWSGRP /* Views */ = {
-			isa = PBXGroup;
-			children = (
-				F002 /* ContentView.swift */,
-				F005 /* TerminalView.swift */,
-				F006 /* PlotterView.swift */,
-				F007 /* DeviceSelectionView.swift */,
-			);
-			path = Views;
-			sourceTree = "<group>";
-		};
-		VMGRP /* ViewModels */ = {
-			isa = PBXGroup;
-			children = (
-				F003 /* BLEManager.swift */,
-				F004 /* PlotterViewModel.swift */,
-			);
-			path = ViewModels;
-			sourceTree = "<group>";
-		};
-		MODELSGRP /* Models */ = {
-			isa = PBXGroup;
-			children = (
-				F008 /* PlotData.swift */,
-			);
-			path = Models;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -141,7 +104,7 @@
 				ja,
 				Base,
 			);
-			mainGroup = MAINGRP /* EasyArduinoBleTerm */;
+			mainGroup = MAINGRP;
 			productRefGroup = PRODGRP /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -166,14 +129,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A001 /* EasyArduinoBleTermApp.swift in Sources */,
-				A002 /* ContentView.swift in Sources */,
-				A003 /* BLEManager.swift in Sources */,
-				A004 /* PlotterViewModel.swift in Sources */,
-				A005 /* TerminalView.swift in Sources */,
-				A006 /* PlotterView.swift in Sources */,
-				A007 /* DeviceSelectionView.swift in Sources */,
-				A008 /* PlotData.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -239,6 +194,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Debug;
@@ -294,6 +250,7 @@
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
@@ -303,12 +260,17 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 1.1;
 				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = VWXW74ETWH;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = EasyArduinoBleTerm/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Ble Term";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -319,9 +281,10 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.nwlab.EasyArduinoBleTerm";
+				MARKETING_VERSION = 1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = jp.NWlab.EasyArduinoBleTerm;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -333,12 +296,17 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 1.1;
 				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = VWXW74ETWH;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = EasyArduinoBleTerm/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Ble Term";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -349,9 +317,10 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.nwlab.EasyArduinoBleTerm";
+				MARKETING_VERSION = 1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = jp.NWlab.EasyArduinoBleTerm;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -361,15 +330,6 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		PROJCFGLIST /* Build configuration list for PBXProject "EasyArduinoBleTerm" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				DBGCFG /* Debug */,
-				RELCFG /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		CFGLIST /* Build configuration list for PBXNativeTarget "EasyArduinoBleTerm" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -379,8 +339,16 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		PROJCFGLIST /* Build configuration list for PBXProject "EasyArduinoBleTerm" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DBGCFG /* Debug */,
+				RELCFG /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
-
 	};
 	rootObject = PROJECT /* Project object */;
 }

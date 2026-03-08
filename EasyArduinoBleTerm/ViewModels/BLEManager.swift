@@ -1,6 +1,9 @@
 import Foundation
 import CoreBluetooth
 import Combine
+#if canImport(UIKit)
+import UIKit
+#endif
 
 // Nordic UART Service UUIDs (ESP32_BleSerial default)
 let NORDIC_SERVICE_UUID = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
@@ -50,6 +53,10 @@ class BLEManager: NSObject, ObservableObject {
     private var uiFlushTimer: Timer?
     private let uiFlushInterval: TimeInterval = 1.0 / 20.0
 
+    // 受信アクティビティ監視（一定時間受信が止まったらスリープ抑止を解除）
+    private var receiveActivityTimer: Timer?
+    private let receiveInactivityTimeout: TimeInterval = 10.0
+
     // Callbacks for ViewModels
     var onDataReceived: ((String, Date) -> Void)?
 
@@ -70,6 +77,8 @@ class BLEManager: NSObject, ObservableObject {
 
     deinit {
         uiFlushTimer?.invalidate()
+        receiveActivityTimer?.invalidate()
+        setScreenSleepDisabled(false)
     }
 
     // MARK: - UI Flush Timer
@@ -127,6 +136,27 @@ class BLEManager: NSObject, ObservableObject {
               let data = text.data(using: .utf8) else { return }
         peripheral.writeValue(data, for: rxChar, type: .withResponse)
     }
+
+    private func setScreenSleepDisabled(_ disabled: Bool) {
+        #if canImport(UIKit)
+        if Thread.isMainThread {
+            UIApplication.shared.isIdleTimerDisabled = disabled
+        } else {
+            DispatchQueue.main.async {
+                UIApplication.shared.isIdleTimerDisabled = disabled
+            }
+        }
+        #endif
+    }
+
+    private func refreshReceiveActivity() {
+        setScreenSleepDisabled(true)
+        receiveActivityTimer?.invalidate()
+        receiveActivityTimer = Timer.scheduledTimer(withTimeInterval: receiveInactivityTimeout, repeats: false) { [weak self] _ in
+            self?.setScreenSleepDisabled(false)
+        }
+        RunLoop.main.add(receiveActivityTimer!, forMode: .common)
+    }
 }
 
 // MARK: - CBCentralManagerDelegate
@@ -135,6 +165,8 @@ extension BLEManager: CBCentralManagerDelegate {
         if central.state != .poweredOn {
             isScanning = false
             connectionState = .disconnected
+            receiveActivityTimer?.invalidate()
+            setScreenSleepDisabled(false)
         }
     }
 
@@ -172,6 +204,8 @@ extension BLEManager: CBCentralManagerDelegate {
         connectionState = .failed(error?.localizedDescription ?? "Connection failed")
         activePeripheral = nil
         connectedPeripheral = nil
+        receiveActivityTimer?.invalidate()
+        setScreenSleepDisabled(false)
     }
 
     func centralManager(_ central: CBCentralManager,
@@ -182,6 +216,8 @@ extension BLEManager: CBCentralManagerDelegate {
         connectedPeripheral = nil
         txCharacteristic = nil
         rxCharacteristic = nil
+        receiveActivityTimer?.invalidate()
+        setScreenSleepDisabled(false)
     }
 }
 
@@ -214,6 +250,8 @@ extension BLEManager: CBPeripheralDelegate {
         guard characteristic.uuid == NORDIC_TX_UUID,
               let data = characteristic.value,
               let str = String(data: data, encoding: .utf8) else { return }
+
+          refreshReceiveActivity()
 
         let now = Date()
         receiveBuffer += str

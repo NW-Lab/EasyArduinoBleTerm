@@ -110,11 +110,15 @@ class PlotterViewModel: ObservableObject {
     var displayTimeSpan: Double { pinchTimeSpan }
 
     var latestTime: Double {
-        rawChannels.flatMap { $0.points }.map { $0.time }.max() ?? 0
+        channelSnapshots.flatMap { $0.points }.map { $0.time }.max() ?? 0
     }
 
     var visibleStartTime: Double {
         max(0, latestTime - displayTimeSpan)
+    }
+
+    var visibleEndTime: Double {
+        visibleStartTime + displayTimeSpan
     }
 
     var yRange: (min: Double, max: Double) {
@@ -123,15 +127,17 @@ class PlotterViewModel: ObservableObject {
             return (yFixedMin, yFixedMax)
         case .auto:
             let vst = visibleStartTime
+            let vet = visibleEndTime
             let visiblePoints = enabledSnapshots.flatMap { ch in
-                ch.points.filter { $0.time >= vst }
+                ch.points.filter { $0.time >= vst && $0.time <= vet }
             }
             guard !visiblePoints.isEmpty else { return (-1, 1) }
             let minV = visiblePoints.map { $0.value }.min()!
             let maxV = visiblePoints.map { $0.value }.max()!
-            let margin = max((maxV - minV) * 0.1, 0.5)
+            let valueSpan = maxV - minV
+            let margin = max(valueSpan * 0.05, 0.01)
             let center = (minV + maxV) / 2
-            let halfSpan = max((maxV - minV) / 2 + margin, 1.0)
+            let halfSpan = max(valueSpan / 2 + margin, 0.02)
             return (center - halfSpan, center + halfSpan)
         }
     }
