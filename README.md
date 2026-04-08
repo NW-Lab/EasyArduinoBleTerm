@@ -1,7 +1,7 @@
 # EasyArduinoBleTerm
 
 Arduino IDE の **シリアルモニター** と **シリアルプロッター** に相当する機能を、BLE（Bluetooth Low Energy）経由で利用するアプリです。
-**iOS 版**（Swift / SwiftUI）と **Windows 版**（WinUI 3 / C#）の両方を収録しています。
+**iOS 版**（Swift / SwiftUI）、**Android 版**（Kotlin / Jetpack Compose）、**Windows 版**（WinUI 3 / C#）の3プラットフォームに対応しています。
 
 [ESP32_BleSerial](https://github.com/avinabmalla/ESP32_BleSerial) ライブラリ（Nordic UART Service）を使用した Arduino / ESP32 デバイスに対応しています。
 
@@ -12,40 +12,45 @@ Arduino IDE の **シリアルモニター** と **シリアルプロッター**
 ```
 EasyArduinoBleTerm/
 ├── iOS/                              # iOS 版 (Swift / SwiftUI / Xcode)
-│   ├── EasyArduinoBleTerm/           # ソースコード
-│   │   ├── Models/
-│   │   ├── ViewModels/
-│   │   └── Views/
+│   ├── EasyArduinoBleTerm/
 │   └── EasyArduinoBleTerm.xcodeproj/
+├── Android/                          # Android 版 (Kotlin / Jetpack Compose)
+│   ├── app/src/main/
+│   │   ├── java/com/nwlab/easyarduinobleterm/
+│   │   │   ├── ble/          # BLE通信サービス
+│   │   │   ├── model/        # データモデル
+│   │   │   ├── viewmodel/    # ViewModel
+│   │   │   └── ui/           # Compose UI
+│   │   └── AndroidManifest.xml
+│   └── build.gradle.kts
 └── Windows/                          # Windows 版 (WinUI 3 / C#)
     └── EasyArduinoBleTerm/
         ├── Models/
         ├── Services/
         ├── ViewModels/
         ├── Views/
-        ├── Helpers/
-        └── EasyArduinoBleTerm.csproj
+        └── Helpers/
 ```
 
 ---
 
 ## 機能一覧
 
-| 機能 | iOS 版 | Windows 版 |
-|---|---|---|
-| BLE デバイスのスキャン・選択 | ✅ | ✅ |
-| アドバタイズ名・RSSI 表示 | ✅ | ✅ |
-| ターミナル（受信表示・送信） | ✅ | ✅ |
-| 受信日時の表示 ON/OFF | ✅ | ✅ |
-| 2000 行バッファー（古い行を自動削除） | ✅ | ✅ |
-| プロッター（CSV 自動解析） | ✅ | ✅ |
-| 最大 5 チャンネル・色分け表示 | ✅ | ✅ |
-| チャンネル表示/非表示切り替え | ✅ | ✅ |
-| 横軸プリセット（0.1s / 1s / 10s） | ✅ | ✅ |
-| 縦軸 自動追従 ⇔ 固定 ワンタップ/クリック | ✅ | ✅ |
-| **横軸ズーム** | ピンチ（水平） | マウスホイール |
-| **縦軸ズーム** | ピンチ（垂直） | Ctrl + ホイール |
-| **縦軸オフセット移動** | 2本指ドラッグ | 右ドラッグ / Shift + ホイール |
+| 機能 | iOS 版 | Android 版 | Windows 版 |
+|---|---|---|---|
+| BLE デバイスのスキャン・選択 | ✅ | ✅ | ✅ |
+| アドバタイズ名・RSSI 表示 | ✅ | ✅ | ✅ |
+| ターミナル（受信表示・送信） | ✅ | ✅ | ✅ |
+| 受信日時の表示 ON/OFF | ✅ | ✅ | ✅ |
+| 2000 行バッファー（古い行を自動削除） | ✅ | ✅ | ✅ |
+| プロッター（CSV 自動解析） | ✅ | ✅ | ✅ |
+| 最大 5 チャンネル・色分け表示 | ✅ | ✅ | ✅ |
+| チャンネル表示/非表示切り替え | ✅ | ✅ | ✅ |
+| 横軸プリセット（0.1s / 1s / 10s） | ✅ | ✅ | ✅ |
+| 縦軸 自動追従 ⇔ 固定 ワンタップ/クリック | ✅ | ✅ | ✅ |
+| **横軸ズーム** | ピンチ（水平） | ピンチ（水平） | マウスホイール |
+| **縦軸ズーム** | ピンチ（垂直） | ピンチ（垂直） | Ctrl + ホイール |
+| **縦軸オフセット移動** | 2本指ドラッグ | 2本指ドラッグ | 右ドラッグ / Shift + ホイール |
 
 ---
 
@@ -78,6 +83,41 @@ open EasyArduinoBleTerm.xcodeproj
 ```
 
 Xcode の **Signing & Capabilities** タブで開発チームを設定し、実機にビルドしてください。
+
+### タッチ操作（プロッター）
+
+| 操作 | 動作 |
+|---|---|
+| 2本指ピンチ（水平） | 横軸（時間幅）ズーム |
+| 2本指ピンチ（垂直） | 縦軸（値の幅）ズーム |
+| 2本指ドラッグ（上下） | 縦軸オフセット移動 |
+
+---
+
+## Android 版のセットアップ
+
+### 必要環境
+
+| 項目 | 内容 |
+|---|---|
+| IDE | Android Studio Ladybug（2024.2.1）以降 |
+| 対応 Android | Android 8.0（API 26）以降 |
+| 実行環境 | BLE 対応 Android 実機 ※ エミュレーターでは BLE 不可 |
+
+### ビルド手順
+
+```bash
+git clone https://github.com/NW-Lab/EasyArduinoBleTerm.git
+```
+
+Android Studio で `Android/` フォルダーを **Open an existing project** で開き、Gradle Sync 後に実機にビルドしてください。
+
+### 配布方法（APK）
+
+1. Android Studio メニュー → **Build → Build Bundle(s) / APK(s) → Build APK(s)**
+2. `app/build/outputs/apk/debug/app-debug.apk` が生成される
+3. APK ファイルをそのまま共有（メール・Google Drive など）
+4. 受け取った側は「提供元不明のアプリ」を許可してインストール
 
 ### タッチ操作（プロッター）
 
