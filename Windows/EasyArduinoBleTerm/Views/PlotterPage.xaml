@@ -1,0 +1,99 @@
+<Page
+    x:Class="EasyArduinoBleTerm.Views.PlotterPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:canvas="using:Microsoft.Graphics.Canvas.UI.Xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Grid RowDefinitions="Auto,Auto,*">
+
+        <!-- Toolbar -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto,Auto"
+              Padding="8,6" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+
+            <!-- Time scale selector -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4">
+                <TextBlock Text="時間幅:" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                <RadioButtons x:Name="TimeScaleRadio"
+                              MaxColumns="3"
+                              SelectionChanged="TimeScaleRadio_SelectionChanged">
+                    <RadioButton Content="0.1s" Tag="0"/>
+                    <RadioButton Content="1s"   Tag="1" IsChecked="True"/>
+                    <RadioButton Content="10s"  Tag="2"/>
+                </RadioButtons>
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+                <!-- Y axis mode toggle -->
+                <Button x:Name="YAxisModeButton"
+                        Click="YAxisModeButton_Click"
+                        ToolTipService.ToolTip="縦軸モードを自動/固定で切り替えます">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <FontIcon x:Name="YAxisModeIcon" Glyph="&#xE8CB;" FontSize="14"/>
+                        <TextBlock x:Name="YAxisModeText" Text="自動"/>
+                    </StackPanel>
+                </Button>
+
+                <!-- Clear -->
+                <Button Command="{x:Bind ViewModel.ClearDataCommand}"
+                        ToolTipService.ToolTip="グラフデータをクリアします">
+                    <FontIcon Glyph="&#xE74D;" FontSize="14"/>
+                </Button>
+            </StackPanel>
+
+            <!-- Gesture hint -->
+            <TextBlock Grid.Column="3"
+                       x:Name="GestureHintText"
+                       VerticalAlignment="Center"
+                       Margin="8,0,4,0"
+                       Foreground="Orange"
+                       FontSize="11"
+                       Visibility="Collapsed"/>
+        </Grid>
+
+        <!-- Channel selector -->
+        <ScrollViewer Grid.Row="1"
+                      HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Disabled"
+                      Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+            <StackPanel x:Name="ChannelPanel"
+                        Orientation="Horizontal"
+                        Spacing="6"
+                        Padding="8,4"/>
+        </ScrollViewer>
+
+        <!-- Graph area -->
+        <Grid Grid.Row="2" x:Name="GraphContainer">
+
+            <!-- Empty state -->
+            <StackPanel x:Name="EmptyState"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="8">
+                <FontIcon Glyph="&#xE9D2;" FontSize="48" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                <TextBlock Text="データ待機中..."
+                           HorizontalAlignment="Center"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                <TextBlock Text="カンマ区切りの数値データを受信するとグラフが表示されます"
+                           HorizontalAlignment="Center"
+                           FontSize="12"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+            </StackPanel>
+
+            <!-- Win2D Canvas -->
+            <canvas:CanvasControl x:Name="PlotCanvas"
+                                  Visibility="Collapsed"
+                                  Draw="PlotCanvas_Draw"
+                                  PointerWheelChanged="PlotCanvas_PointerWheelChanged"
+                                  PointerPressed="PlotCanvas_PointerPressed"
+                                  PointerMoved="PlotCanvas_PointerMoved"
+                                  PointerReleased="PlotCanvas_PointerReleased"
+                                  PointerCaptureLost="PlotCanvas_PointerCaptureLost"
+                                  Background="#121212"/>
+        </Grid>
+
+    </Grid>
+</Page>

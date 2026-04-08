@@ -1,71 +1,125 @@
 # EasyArduinoBleTerm
 
-Arduino IDEのシリアルモニター・シリアルプロッターに相当する機能を、BLE（Bluetooth Low Energy）経由でiPhoneから利用するためのiOSアプリです。
+Arduino IDE の **シリアルモニター** と **シリアルプロッター** に相当する機能を、BLE（Bluetooth Low Energy）経由で利用するアプリです。
+**iOS 版**（Swift / SwiftUI）と **Windows 版**（WinUI 3 / C#）の両方を収録しています。
 
-## 概要
+[ESP32_BleSerial](https://github.com/avinabmalla/ESP32_BleSerial) ライブラリ（Nordic UART Service）を使用した Arduino / ESP32 デバイスに対応しています。
 
-[ESP32_BleSerial](https://github.com/avinabmalla/ESP32_BleSerial) ライブラリを使用したArduino/ESP32デバイスと接続し、データの送受信・可視化を行います。
+---
 
-## 機能
+## リポジトリ構成
 
-### BLE接続
-- 周辺のBLEデバイスをスキャンし、アドバタイズ名で接続先を選択できます。
-- Nordic UART Service（NUS）プロファイルに対応しています。
-- 接続・切断はナビゲーションバーのボタンから操作できます。
+```
+EasyArduinoBleTerm/
+├── iOS/                              # iOS 版 (Swift / SwiftUI / Xcode)
+│   ├── EasyArduinoBleTerm/           # ソースコード
+│   │   ├── Models/
+│   │   ├── ViewModels/
+│   │   └── Views/
+│   └── EasyArduinoBleTerm.xcodeproj/
+└── Windows/                          # Windows 版 (WinUI 3 / C#)
+    └── EasyArduinoBleTerm/
+        ├── Models/
+        ├── Services/
+        ├── ViewModels/
+        ├── Views/
+        ├── Helpers/
+        └── EasyArduinoBleTerm.csproj
+```
 
-### ターミナル
-- 受信したデータをテキストとして表示します。
-- 各行の受信日時（`HH:mm:ss.SSS`形式）を記録します。
-- 受信日時の表示をON/OFFで切り替えられます。
-- 自動スクロール機能があります。
-- テキスト入力フィールドからデバイスにデータを送信できます。
+---
 
-### プロッター
-- カンマ区切り（CSV）で受信した数値データをリアルタイムグラフにプロットします。
-- 最大5チャンネルのデータを同時に表示できます。
-- チャンネルごとに表示/非表示を切り替えられます。
-- **横軸（時間軸）:**
-  - ピンチ操作でズームイン・ズームアウトができます。
-  - 0.1秒 / 1秒 / 10秒 の3段階プリセットで切り替えられます。
-  - 時間幅とグリッド間隔が画面右下に表示されます。
-- **縦軸（値軸）:**
-  - **自動モード:** 表示中のデータの中心に自動的に合わせます。
-  - **固定モード:** 最小値・最大値を手動で設定できます。
+## 機能一覧
 
-## 対応環境
+| 機能 | iOS 版 | Windows 版 |
+|---|---|---|
+| BLE デバイスのスキャン・選択 | ✅ | ✅ |
+| アドバタイズ名・RSSI 表示 | ✅ | ✅ |
+| ターミナル（受信表示・送信） | ✅ | ✅ |
+| 受信日時の表示 ON/OFF | ✅ | ✅ |
+| 2000 行バッファー（古い行を自動削除） | ✅ | ✅ |
+| プロッター（CSV 自動解析） | ✅ | ✅ |
+| 最大 5 チャンネル・色分け表示 | ✅ | ✅ |
+| チャンネル表示/非表示切り替え | ✅ | ✅ |
+| 横軸プリセット（0.1s / 1s / 10s） | ✅ | ✅ |
+| 縦軸 自動追従 ⇔ 固定 ワンタップ/クリック | ✅ | ✅ |
+| **横軸ズーム** | ピンチ（水平） | マウスホイール |
+| **縦軸ズーム** | ピンチ（垂直） | Ctrl + ホイール |
+| **縦軸オフセット移動** | 2本指ドラッグ | 右ドラッグ / Shift + ホイール |
 
-| 項目 | 内容 |
-|------|------|
-| プラットフォーム | iOS 17.0 以上 |
-| 開発言語 | Swift 5.0 |
-| 開発環境 | Xcode 15.4 以上 |
-| 対応デバイス | iPhone / iPad |
+---
 
-## BLE サービス情報
-
-ESP32_BleSerial ライブラリのデフォルト設定（Nordic UART Service）に対応しています。
+## BLE プロトコル（ESP32_BleSerial / Nordic UART Service）
 
 | 名称 | UUID |
-|------|------|
+|---|---|
 | Service | `6E400001-B5A3-F393-E0A9-E50E24DCCA9E` |
-| RX Characteristic (Write) | `6E400002-B5A3-F393-E0A9-E50E24DCCA9E` |
-| TX Characteristic (Notify) | `6E400003-B5A3-F393-E0A9-E50E24DCCA9E` |
+| TX Characteristic（ESP32 → アプリ、Notify） | `6E400003-B5A3-F393-E0A9-E50E24DCCA9E` |
+| RX Characteristic（アプリ → ESP32、Write） | `6E400002-B5A3-F393-E0A9-E50E24DCCA9E` |
 
-## セットアップ
+---
 
-### iOSアプリ
+## iOS 版のセットアップ
 
-1. このリポジトリをクローンします。
-   ```bash
-   git clone https://github.com/NW-Lab/EasyArduinoBleTerm.git
-   ```
-2. `EasyArduinoBleTerm.xcodeproj` をXcodeで開きます。
-3. Signing & Capabilities で開発チームを設定します。
-4. iPhoneに実機ビルドします。
+### 必要環境
 
-### Arduino / ESP32 側
+| 項目 | 内容 |
+|---|---|
+| OS | macOS 13 以降 |
+| IDE | Xcode 15 以降 |
+| 実行環境 | iPhone / iPad（iOS 16 以降）実機 ※ BLE はシミュレーター不可 |
 
-[ESP32_BleSerial](https://github.com/avinabmalla/ESP32_BleSerial) ライブラリをArduino IDEにインストールし、以下のような基本的なスケッチで動作確認できます。
+### ビルド手順
+
+```bash
+git clone https://github.com/NW-Lab/EasyArduinoBleTerm.git
+cd EasyArduinoBleTerm/iOS
+open EasyArduinoBleTerm.xcodeproj
+```
+
+Xcode の **Signing & Capabilities** タブで開発チームを設定し、実機にビルドしてください。
+
+### タッチ操作（プロッター）
+
+| 操作 | 動作 |
+|---|---|
+| 2本指ピンチ（水平） | 横軸（時間幅）ズーム |
+| 2本指ピンチ（垂直） | 縦軸（値の幅）ズーム |
+| 2本指ドラッグ（上下） | 縦軸オフセット移動 |
+
+---
+
+## Windows 版のセットアップ
+
+### 必要環境
+
+| 項目 | 内容 |
+|---|---|
+| OS | Windows 10 (1903) 以降 または Windows 11 |
+| IDE | Visual Studio 2022（17.8 以降） |
+| ワークロード | .NET デスクトップ開発 + Windows アプリ開発 |
+| その他 | Windows App SDK 拡張機能、BLE 対応 Bluetooth アダプター |
+
+### ビルド手順
+
+```bash
+git clone https://github.com/NW-Lab/EasyArduinoBleTerm.git
+```
+
+Visual Studio で `Windows/EasyArduinoBleTerm/EasyArduinoBleTerm.csproj` を開き、ビルドしてください。
+
+### マウス操作（プロッター）
+
+| 操作 | 動作 |
+|---|---|
+| ホイール回転 | 横軸（時間幅）ズーム |
+| Ctrl + ホイール | 縦軸（値の幅）ズーム |
+| Shift + ホイール | 縦軸オフセット（上下スクロール） |
+| 右ボタンドラッグ | 縦軸オフセット（上下スクロール） |
+
+---
+
+## Arduino / ESP32 サンプルコード
 
 ```cpp
 #include <BleSerial.h>
@@ -73,46 +127,27 @@ ESP32_BleSerial ライブラリのデフォルト設定（Nordic UART Service）
 BleSerial ble;
 
 void setup() {
-    Serial.begin(115200);
     // アドバタイズ名を設定（アプリのスキャン画面に表示されます）
     ble.begin("MyESP32Device");
 }
 
 void loop() {
-    // カンマ区切りでデータを送信（プロッターで表示可能）
-    float sensor1 = analogRead(34) * 3.3 / 4095.0;
-    float sensor2 = analogRead(35) * 3.3 / 4095.0;
-    ble.printf("%.3f,%.3f\n", sensor1, sensor2);
+    // カンマ区切りでデータを送信（プロッターで複数チャンネル表示可能）
+    float v1 = sin(millis() / 1000.0);
+    float v2 = cos(millis() / 1000.0);
+    ble.printf("%.3f,%.3f\n", v1, v2);
 
-    // BLEからの受信データをシリアルに転送
+    // アプリからの受信データを処理
     while (ble.available()) {
-        Serial.write(ble.read());
+        char c = ble.read();
+        // 必要に応じて処理
     }
 
-    delay(10); // 100Hz
+    delay(10); // 100 Hz
 }
 ```
 
-## プロジェクト構成
-
-```
-EasyArduinoBleTerm/
-├── EasyArduinoBleTerm.xcodeproj/
-│   └── project.pbxproj
-└── EasyArduinoBleTerm/
-    ├── EasyArduinoBleTermApp.swift   # アプリエントリーポイント
-    ├── Info.plist                    # Bluetooth権限設定
-    ├── Models/
-    │   └── PlotData.swift            # プロット用データモデル
-    ├── ViewModels/
-    │   ├── BLEManager.swift          # BLE通信管理（CoreBluetooth）
-    │   └── PlotterViewModel.swift    # プロッターのロジック
-    └── Views/
-        ├── ContentView.swift         # メイン画面（タブ切り替え）
-        ├── DeviceSelectionView.swift # デバイス選択画面
-        ├── TerminalView.swift        # ターミナル画面
-        └── PlotterView.swift         # プロッター画面
-```
+---
 
 ## ライセンス
 
