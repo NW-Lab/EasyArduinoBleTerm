@@ -54,6 +54,48 @@ EasyArduinoBleTerm/
 
 ---
 
+---
+
+## Web 版のセットアップ
+
+### 必要環境
+
+| 項目 | 内容 |
+|---|---|
+| ブラウザ | Google Chrome 56 以降 または Microsoft Edge 79 以降 |
+| 接続環境 | **HTTPS** または **localhost** が必須（HTTP では Web BLE 動作不可） |
+| OS | Windows 10/11・macOS・Android（iOS / Safari は非対応） |
+
+### ローカルで起動する方法
+
+```bash
+git clone https://github.com/NW-Lab/EasyArduinoBleTerm.git
+cd EasyArduinoBleTerm/Web/EasyArduinoBleTerm
+pnpm install
+pnpm dev
+# → http://localhost:5173 をChrome/Edgeで開く
+```
+
+### ビルドして静的ファイルとして配布する方法
+
+```bash
+pnpm build
+# dist/ フォルダーが生成される
+```
+
+生成された `dist/` フォルダーを HTTPS 対応のウェブサーバー（GitHub Pages、Netlify、Vercel など）に配置するだけで使えます。
+
+### マウス操作（プロッター）
+
+| 操作 | 動作 |
+|---|---|
+| ホイール回転 | 横軸（時間幅）ズーム |
+| Ctrl + ホイール | 縦軸（値の幅）ズーム |
+| Shift + ホイール | 縦軸オフセット（上下スクロール） |
+| 右ボタンドラッグ | 縦軸オフセット（上下スクロール） |
+
+---
+
 ## BLE プロトコル（ESP32_BleSerial / Nordic UART Service）
 
 | 名称 | UUID |
