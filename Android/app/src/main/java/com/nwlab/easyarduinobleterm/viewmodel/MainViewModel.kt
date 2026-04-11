@@ -8,7 +8,6 @@ import com.nwlab.easyarduinobleterm.ble.BleService
 import com.nwlab.easyarduinobleterm.ble.BleState
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -21,11 +20,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope, SharingStarted.Eagerly, emptyList()
     )
 
-    // viewModelScope を渡して子ViewModelのタイマーを動かす
+    // viewModelScope を渡して子ViewModelのスコープを共有
     val terminalViewModel = TerminalViewModel(viewModelScope)
     val plotterViewModel  = PlotterViewModel(viewModelScope)
 
     init {
+        // BleService からデータが届いたらターミナル・プロッターに転送
+        // onDataReceived はメインスレッドから呼ばれる
         bleService.onDataReceived = { line ->
             terminalViewModel.addLine(line)
             plotterViewModel.addLine(line)
@@ -34,13 +35,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startScan()  = bleService.startScan()
     fun stopScan()   = bleService.stopScan()
-
-    fun connect(device: BleDevice) {
-        viewModelScope.launch { bleService.connect(device) }
-    }
-
+    fun connect(device: BleDevice) = bleService.connect(device)
     fun disconnect() = bleService.disconnect()
-
     fun sendText(text: String) = bleService.send(text)
 
     override fun onCleared() {

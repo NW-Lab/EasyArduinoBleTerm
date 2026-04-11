@@ -1,20 +1,19 @@
 package com.nwlab.easyarduinobleterm.viewmodel
 
+import android.util.Log
 import com.nwlab.easyarduinobleterm.model.TerminalMessage
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import java.time.LocalDateTime
+
+private const val TAG = "TerminalViewModel"
 
 class TerminalViewModel(private val scope: CoroutineScope) {
 
     companion object {
-        private const val MAX_MESSAGES    = 2000
-        private const val FLUSH_INTERVAL_MS = 50L  // 20fps
+        private const val MAX_MESSAGES = 2000
     }
 
     private val _messages = MutableStateFlow<List<TerminalMessage>>(emptyList())
@@ -26,33 +25,17 @@ class TerminalViewModel(private val scope: CoroutineScope) {
     private val _autoScroll = MutableStateFlow(true)
     val autoScroll: StateFlow<Boolean> = _autoScroll.asStateFlow()
 
-    // 受信バッファー（メインスレッドからのみアクセス）
-    private val pendingLines = ArrayDeque<TerminalMessage>()
-    private var flushJob: Job? = null
-
+    // BleService.onDataReceived から呼ばれる（メインスレッド）
     fun addLine(line: String) {
-        pendingLines.addLast(TerminalMessage(line, LocalDateTime.now()))
-
-        // フラッシュタイマーが動いていなければ起動
-        if (flushJob == null || flushJob?.isActive == false) {
-            flushJob = scope.launch {
-                delay(FLUSH_INTERVAL_MS)
-                flush()
-            }
+        Log.d(TAG, "addLine: $line")
+        val msg = TerminalMessage(line, LocalDateTime.now())
+        val current = _messages.value
+        val next = if (current.size >= MAX_MESSAGES) {
+            current.drop(current.size - MAX_MESSAGES + 1) + msg
+        } else {
+            current + msg
         }
-    }
-
-    private fun flush() {
-        if (pendingLines.isEmpty()) return
-        val current = _messages.value.toMutableList()
-        while (pendingLines.isNotEmpty()) {
-            current.add(pendingLines.removeFirst())
-        }
-        if (current.size > MAX_MESSAGES) {
-            current.subList(0, current.size - MAX_MESSAGES).clear()
-        }
-        _messages.value = current
-        flushJob = null
+        _messages.value = next
     }
 
     fun toggleTimestamp() { _showTimestamp.value = !_showTimestamp.value }
@@ -60,8 +43,5 @@ class TerminalViewModel(private val scope: CoroutineScope) {
 
     fun clearMessages() {
         _messages.value = emptyList()
-        pendingLines.clear()
-        flushJob?.cancel()
-        flushJob = null
     }
 }

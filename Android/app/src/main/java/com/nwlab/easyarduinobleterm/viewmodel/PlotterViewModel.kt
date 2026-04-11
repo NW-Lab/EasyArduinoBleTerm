@@ -1,21 +1,20 @@
 package com.nwlab.easyarduinobleterm.viewmodel
 
+import android.util.Log
 import com.nwlab.easyarduinobleterm.model.CHANNEL_COLORS
 import com.nwlab.easyarduinobleterm.model.PlotChannel
 import com.nwlab.easyarduinobleterm.model.PlotPoint
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
+
+private const val TAG = "PlotterViewModel"
 
 class PlotterViewModel(private val scope: CoroutineScope) {
 
     companion object {
-        private const val MAX_POINTS      = 5000
-        private const val DISPLAY_FPS_MS  = 33L   // ~30fps
+        private const val MAX_POINTS = 5000
     }
 
     // --- Display snapshot (published to UI) ---
@@ -40,16 +39,17 @@ class PlotterViewModel(private val scope: CoroutineScope) {
     private val _isInteracting = MutableStateFlow(false)
     val isInteracting: StateFlow<Boolean> = _isInteracting.asStateFlow()
 
-    // --- Raw data (not published directly) ---
-    private val rawChannels  = mutableListOf<MutableList<PlotPoint>>()
-    private var startTimeMs  = -1L
-    private var timerJob: Job? = null
+    // --- Raw data ---
+    private val rawChannels = mutableListOf<MutableList<PlotPoint>>()
+    private var startTimeMs = -1L
 
     // --- Data ingestion ---
-
+    // BleService.onDataReceived から呼ばれる（メインスレッド）
     fun addLine(line: String) {
         val parts = line.split(",").mapNotNull { it.trim().toFloatOrNull() }
         if (parts.isEmpty()) return
+
+        Log.d(TAG, "addLine: ${parts.size} channels")
 
         val now = System.currentTimeMillis()
         if (startTimeMs < 0) startTimeMs = now
@@ -66,18 +66,9 @@ class PlotterViewModel(private val scope: CoroutineScope) {
             if (list.size > MAX_POINTS) list.removeAt(0)
         }
 
-        // 描画タイマーが止まっていたら起動
-        if (timerJob == null || timerJob?.isActive == false) {
-            startDisplayTimer()
-        }
-    }
-
-    private fun startDisplayTimer() {
-        timerJob = scope.launch {
-            while (true) {
-                delay(DISPLAY_FPS_MS)
-                if (!_isInteracting.value) publishSnapshot()
-            }
+        // インタラクション中でなければ即座に描画更新
+        if (!_isInteracting.value) {
+            publishSnapshot()
         }
     }
 
@@ -160,7 +151,5 @@ class PlotterViewModel(private val scope: CoroutineScope) {
         rawChannels.clear()
         startTimeMs = -1L
         _channels.value = emptyList()
-        timerJob?.cancel()
-        timerJob = null
     }
 }
