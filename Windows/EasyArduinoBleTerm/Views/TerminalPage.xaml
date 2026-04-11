@@ -52,7 +52,7 @@
 
         <!-- Send area -->
         <Grid Grid.Row="2" ColumnDefinitions="*,Auto"
-              Padding="8,6" Spacing="8"
+              Padding="8,6" ColumnSpacing="8"
               Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
             <TextBox Grid.Column="0"
                      x:Name="SendTextBox"
