@@ -57,7 +57,7 @@ public sealed partial class MainWindow : Window
             var dialog = new DeviceSelectionDialog(_vm) { XamlRoot = Content.XamlRoot };
             var result = await dialog.ShowAsync();
             if (result == ContentDialogResult.Primary)
-                await _vm.ConnectAsync();
+                await _vm.ConnectCommand.ExecuteAsync(null);
         }
     }
 
