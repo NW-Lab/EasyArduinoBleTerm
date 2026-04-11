@@ -1,16 +1,20 @@
 package com.nwlab.easyarduinobleterm.viewmodel
 
-import androidx.lifecycle.ViewModel
 import com.nwlab.easyarduinobleterm.model.TerminalMessage
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 
-class TerminalViewModel : ViewModel() {
+class TerminalViewModel(private val scope: CoroutineScope) {
 
     companion object {
-        private const val MAX_MESSAGES = 2000
+        private const val MAX_MESSAGES    = 2000
+        private const val FLUSH_INTERVAL_MS = 50L  // 20fps
     }
 
     private val _messages = MutableStateFlow<List<TerminalMessage>>(emptyList())
@@ -22,16 +26,19 @@ class TerminalViewModel : ViewModel() {
     private val _autoScroll = MutableStateFlow(true)
     val autoScroll: StateFlow<Boolean> = _autoScroll.asStateFlow()
 
-    // 受信バッファー（UIスレッドから呼ばれる）
+    // 受信バッファー（メインスレッドからのみアクセス）
     private val pendingLines = ArrayDeque<TerminalMessage>()
-    private var lastFlushTime = 0L
+    private var flushJob: Job? = null
 
     fun addLine(line: String) {
         pendingLines.addLast(TerminalMessage(line, LocalDateTime.now()))
-        val now = System.currentTimeMillis()
-        if (now - lastFlushTime >= 50L) { // 20fps
-            flush()
-            lastFlushTime = now
+
+        // フラッシュタイマーが動いていなければ起動
+        if (flushJob == null || flushJob?.isActive == false) {
+            flushJob = scope.launch {
+                delay(FLUSH_INTERVAL_MS)
+                flush()
+            }
         }
     }
 
@@ -45,18 +52,16 @@ class TerminalViewModel : ViewModel() {
             current.subList(0, current.size - MAX_MESSAGES).clear()
         }
         _messages.value = current
+        flushJob = null
     }
 
-    fun toggleTimestamp() {
-        _showTimestamp.value = !_showTimestamp.value
-    }
-
-    fun toggleAutoScroll() {
-        _autoScroll.value = !_autoScroll.value
-    }
+    fun toggleTimestamp() { _showTimestamp.value = !_showTimestamp.value }
+    fun toggleAutoScroll() { _autoScroll.value = !_autoScroll.value }
 
     fun clearMessages() {
         _messages.value = emptyList()
         pendingLines.clear()
+        flushJob?.cancel()
+        flushJob = null
     }
 }

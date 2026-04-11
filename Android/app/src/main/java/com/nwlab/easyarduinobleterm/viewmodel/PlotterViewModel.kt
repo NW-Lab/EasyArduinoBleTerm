@@ -1,10 +1,9 @@
 package com.nwlab.easyarduinobleterm.viewmodel
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.nwlab.easyarduinobleterm.model.CHANNEL_COLORS
 import com.nwlab.easyarduinobleterm.model.PlotChannel
 import com.nwlab.easyarduinobleterm.model.PlotPoint
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,11 +11,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class PlotterViewModel : ViewModel() {
+class PlotterViewModel(private val scope: CoroutineScope) {
 
     companion object {
-        private const val MAX_POINTS = 5000
-        private const val DISPLAY_FPS_MS = 33L  // ~30fps
+        private const val MAX_POINTS      = 5000
+        private const val DISPLAY_FPS_MS  = 33L   // ~30fps
     }
 
     // --- Display snapshot (published to UI) ---
@@ -42,9 +41,8 @@ class PlotterViewModel : ViewModel() {
     val isInteracting: StateFlow<Boolean> = _isInteracting.asStateFlow()
 
     // --- Raw data (not published directly) ---
-    private val rawChannels = mutableListOf<MutableList<PlotPoint>>()
-    private var channelCount = 0
-    private var startTimeMs = -1L
+    private val rawChannels  = mutableListOf<MutableList<PlotPoint>>()
+    private var startTimeMs  = -1L
     private var timerJob: Job? = null
 
     // --- Data ingestion ---
@@ -60,7 +58,6 @@ class PlotterViewModel : ViewModel() {
         // チャンネル数が増えたら拡張
         while (rawChannels.size < parts.size) {
             rawChannels.add(mutableListOf())
-            channelCount = rawChannels.size
         }
 
         parts.forEachIndexed { i, value ->
@@ -69,14 +66,14 @@ class PlotterViewModel : ViewModel() {
             if (list.size > MAX_POINTS) list.removeAt(0)
         }
 
-        // タイマー起動
+        // 描画タイマーが止まっていたら起動
         if (timerJob == null || timerJob?.isActive == false) {
             startDisplayTimer()
         }
     }
 
     private fun startDisplayTimer() {
-        timerJob = viewModelScope.launch {
+        timerJob = scope.launch {
             while (true) {
                 delay(DISPLAY_FPS_MS)
                 if (!_isInteracting.value) publishSnapshot()
@@ -103,15 +100,15 @@ class PlotterViewModel : ViewModel() {
     }
 
     private fun updateAutoY(snapshot: List<PlotChannel>) {
-        val window = _timeWindowSec.value
-        val latestTime = snapshot.flatMap { it.points }.maxOfOrNull { it.timeSeconds } ?: return
-        val visiblePoints = snapshot
+        val window      = _timeWindowSec.value
+        val latestTime  = snapshot.flatMap { it.points }.maxOfOrNull { it.timeSeconds } ?: return
+        val visiblePts  = snapshot
             .filter { it.visible }
             .flatMap { it.points }
             .filter { it.timeSeconds >= latestTime - window }
-        if (visiblePoints.isEmpty()) return
-        val min = visiblePoints.minOf { it.value }
-        val max = visiblePoints.maxOf { it.value }
+        if (visiblePts.isEmpty()) return
+        val min    = visiblePts.minOf { it.value }
+        val max    = visiblePts.maxOf { it.value }
         val margin = ((max - min) * 0.1f).coerceAtLeast(0.1f)
         _yMin.value = min - margin
         _yMax.value = max + margin
@@ -134,6 +131,7 @@ class PlotterViewModel : ViewModel() {
     // --- Y axis ---
     fun toggleYAxisMode() {
         if (_yAutoMode.value) {
+            // 自動→固定: 現在の自動範囲をそのまま固定値として引き継ぐ
             _yAutoMode.value = false
         } else {
             _yAutoMode.value = true
@@ -141,7 +139,7 @@ class PlotterViewModel : ViewModel() {
     }
 
     fun scaleYAxis(factor: Float) {
-        if (_yAutoMode.value) switchToFixed()
+        if (_yAutoMode.value) _yAutoMode.value = false
         val center = (_yMin.value + _yMax.value) / 2f
         val half   = ((_yMax.value - _yMin.value) / 2f * factor).coerceAtLeast(0.01f)
         _yMin.value = center - half
@@ -149,13 +147,9 @@ class PlotterViewModel : ViewModel() {
     }
 
     fun shiftYAxis(deltaValue: Float) {
-        if (_yAutoMode.value) switchToFixed()
+        if (_yAutoMode.value) _yAutoMode.value = false
         _yMin.value += deltaValue
         _yMax.value += deltaValue
-    }
-
-    private fun switchToFixed() {
-        _yAutoMode.value = false
     }
 
     // --- Interaction ---
@@ -164,7 +158,6 @@ class PlotterViewModel : ViewModel() {
     // --- Clear ---
     fun clearData() {
         rawChannels.clear()
-        channelCount = 0
         startTimeMs = -1L
         _channels.value = emptyList()
         timerJob?.cancel()

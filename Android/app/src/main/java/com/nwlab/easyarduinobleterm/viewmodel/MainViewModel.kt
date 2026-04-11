@@ -21,8 +21,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope, SharingStarted.Eagerly, emptyList()
     )
 
-    val terminalViewModel = TerminalViewModel()
-    val plotterViewModel  = PlotterViewModel()
+    // viewModelScope を渡して子ViewModelのタイマーを動かす
+    val terminalViewModel = TerminalViewModel(viewModelScope)
+    val plotterViewModel  = PlotterViewModel(viewModelScope)
 
     init {
         bleService.onDataReceived = { line ->
