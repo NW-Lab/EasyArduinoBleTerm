@@ -32,6 +32,11 @@ fun DeviceScanScreen(
         if (bleState is BleState.Connected) onConnected()
     }
 
+    // 画面表示時に自動スキャン開始
+    LaunchedEffect(Unit) {
+        vm.startScan()
+    }
+
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -73,8 +78,9 @@ fun DeviceScanScreen(
                 )
             }
         } else {
+            // key = address でリストを安定させ、RSSI更新時の全行書き換えを防ぐ
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(devices) { device ->
+                items(devices, key = { it.address }) { device ->
                     DeviceItem(
                         device    = device,
                         isLoading = bleState is BleState.Connecting,

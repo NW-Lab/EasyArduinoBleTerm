@@ -6,16 +6,19 @@ import android.bluetooth.le.*
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.UUID
 
+private const val TAG = "BleService"
+
 // Nordic UART Service UUIDs (ESP32_BleSerial)
-val SERVICE_UUID: UUID  = UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
-val TX_CHAR_UUID: UUID  = UUID.fromString("6E400003-B5A3-F393-E0A9-E50E24DCCA9E") // ESP32 → App (Notify)
-val RX_CHAR_UUID: UUID  = UUID.fromString("6E400002-B5A3-F393-E0A9-E50E24DCCA9E") // App → ESP32 (Write)
-val CCCD_UUID: UUID     = UUID.fromString("00002902-0000-1000-8000-00805F9B34FB")
+val SERVICE_UUID: UUID = UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
+val TX_CHAR_UUID: UUID = UUID.fromString("6E400003-B5A3-F393-E0A9-E50E24DCCA9E") // ESP32→App (Notify)
+val RX_CHAR_UUID: UUID = UUID.fromString("6E400002-B5A3-F393-E0A9-E50E24DCCA9E") // App→ESP32 (Write)
+val CCCD_UUID: UUID    = UUID.fromString("00002902-0000-1000-8000-00805F9B34FB")
 
 data class BleDevice(
     val name: String,
@@ -50,7 +53,7 @@ class BleService(private val context: Context) {
     private val _scannedDevices = MutableStateFlow<List<BleDevice>>(emptyList())
     val scannedDevices: StateFlow<List<BleDevice>> = _scannedDevices.asStateFlow()
 
-    // Callback for received data lines
+    // Callback for received data lines (called on main thread)
     var onDataReceived: ((String) -> Unit)? = null
 
     // --- Scan ---
@@ -70,6 +73,10 @@ class BleService(private val context: Context) {
             current.sortByDescending { it.rssi }
             _scannedDevices.value = current
         }
+
+        override fun onScanFailed(errorCode: Int) {
+            Log.e(TAG, "Scan failed: errorCode=$errorCode")
+        }
     }
 
     fun startScan() {
@@ -80,6 +87,7 @@ class BleService(private val context: Context) {
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()
         bleScanner?.startScan(null, settings, scanCallback)
+        Log.d(TAG, "Scan started")
         // 15秒後に自動停止
         mainHandler.postDelayed({ stopScan() }, 15_000)
     }
@@ -90,6 +98,7 @@ class BleService(private val context: Context) {
         if (_state.value is BleState.Scanning) {
             _state.value = BleState.Disconnected
         }
+        Log.d(TAG, "Scan stopped")
     }
 
     // --- Connect ---
@@ -97,10 +106,14 @@ class BleService(private val context: Context) {
     fun connect(device: BleDevice) {
         stopScan()
         _state.value = BleState.Connecting
-        gatt = device.device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+        Log.d(TAG, "Connecting to ${device.name} (${device.address})")
+        gatt = device.device.connectGatt(
+            context, false, gattCallback, BluetoothDevice.TRANSPORT_LE
+        )
     }
 
     fun disconnect() {
+        Log.d(TAG, "Disconnect requested")
         gatt?.disconnect()
         gatt?.close()
         gatt = null
@@ -112,7 +125,10 @@ class BleService(private val context: Context) {
     // --- Send ---
 
     fun send(text: String) {
-        val char = rxCharacteristic ?: return
+        val char = rxCharacteristic ?: run {
+            Log.w(TAG, "send: rxCharacteristic is null")
+            return
+        }
         val bytes = (text + "\n").toByteArray(Charsets.UTF_8)
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             gatt?.writeCharacteristic(char, bytes, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
@@ -126,16 +142,20 @@ class BleService(private val context: Context) {
 
     // --- GATT Callback ---
 
-    private var receiveBuffer = StringBuilder()
+    private val receiveBuffer = StringBuilder()
 
     private val gattCallback = object : BluetoothGattCallback() {
 
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
+            Log.d(TAG, "onConnectionStateChange: status=$status newState=$newState")
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
-                    gatt.discoverServices()
+                    Log.d(TAG, "Connected! Discovering services...")
+                    // サービス検出前に少し待つ（一部のデバイスで必要）
+                    mainHandler.postDelayed({ gatt.discoverServices() }, 600)
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
+                    Log.d(TAG, "Disconnected. status=$status")
                     mainHandler.post {
                         _state.value = if (status == BluetoothGatt.GATT_SUCCESS)
                             BleState.Disconnected
@@ -143,55 +163,113 @@ class BleService(private val context: Context) {
                             BleState.Error("切断されました (status=$status)")
                     }
                     this@BleService.gatt = null
+                    txCharacteristic = null
+                    rxCharacteristic = null
                 }
             }
         }
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
+            Log.d(TAG, "onServicesDiscovered: status=$status")
             if (status != BluetoothGatt.GATT_SUCCESS) {
-                mainHandler.post { _state.value = BleState.Error("サービス検出失敗") }
+                mainHandler.post { _state.value = BleState.Error("サービス検出失敗 status=$status") }
                 return
             }
-            val service = gatt.getService(SERVICE_UUID)
-            if (service == null) {
-                mainHandler.post { _state.value = BleState.Error("Nordic UART Service が見つかりません") }
-                return
-            }
-            txCharacteristic = service.getCharacteristic(TX_CHAR_UUID)
-            rxCharacteristic = service.getCharacteristic(RX_CHAR_UUID)
 
-            // TX の Notify を有効化
-            txCharacteristic?.let { char ->
-                gatt.setCharacteristicNotification(char, true)
-                val descriptor = char.getDescriptor(CCCD_UUID)
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                    gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
-                } else {
-                    @Suppress("DEPRECATION")
-                    descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                    @Suppress("DEPRECATION")
-                    gatt.writeDescriptor(descriptor)
+            // 全サービスをログ出力
+            gatt.services.forEach { svc ->
+                Log.d(TAG, "  Service: ${svc.uuid}")
+                svc.characteristics.forEach { ch ->
+                    Log.d(TAG, "    Char: ${ch.uuid} props=${ch.properties}")
                 }
             }
 
-            val deviceName = gatt.device.name ?: gatt.device.address
-            mainHandler.post { _state.value = BleState.Connected(deviceName) }
+            val service = gatt.getService(SERVICE_UUID)
+            if (service == null) {
+                Log.e(TAG, "Nordic UART Service not found!")
+                mainHandler.post { _state.value = BleState.Error("Nordic UART Service が見つかりません") }
+                return
+            }
+
+            txCharacteristic = service.getCharacteristic(TX_CHAR_UUID)
+            rxCharacteristic = service.getCharacteristic(RX_CHAR_UUID)
+
+            Log.d(TAG, "TX char: $txCharacteristic")
+            Log.d(TAG, "RX char: $rxCharacteristic")
+
+            // TX の Notify を有効化
+            val txChar = txCharacteristic
+            if (txChar == null) {
+                Log.e(TAG, "TX characteristic not found!")
+                mainHandler.post { _state.value = BleState.Error("TX Characteristic が見つかりません") }
+                return
+            }
+
+            val notifySet = gatt.setCharacteristicNotification(txChar, true)
+            Log.d(TAG, "setCharacteristicNotification: $notifySet")
+
+            val descriptor = txChar.getDescriptor(CCCD_UUID)
+            if (descriptor == null) {
+                Log.e(TAG, "CCCD descriptor not found! Proceeding anyway...")
+                // CCCD がなくても接続完了として扱う
+                mainHandler.post {
+                    _state.value = BleState.Connected(gatt.device.name ?: gatt.device.address)
+                }
+                return
+            }
+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                val result = gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+                Log.d(TAG, "writeDescriptor (API33+): result=$result")
+            } else {
+                @Suppress("DEPRECATION")
+                descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                @Suppress("DEPRECATION")
+                val result = gatt.writeDescriptor(descriptor)
+                Log.d(TAG, "writeDescriptor (legacy): result=$result")
+            }
+            // 接続完了はonDescriptorWriteで通知
         }
 
+        override fun onDescriptorWrite(
+            gatt: BluetoothGatt,
+            descriptor: BluetoothGattDescriptor,
+            status: Int
+        ) {
+            Log.d(TAG, "onDescriptorWrite: uuid=${descriptor.uuid} status=$status")
+            if (descriptor.uuid == CCCD_UUID && status == BluetoothGatt.GATT_SUCCESS) {
+                Log.d(TAG, "Notify enabled successfully!")
+                mainHandler.post {
+                    _state.value = BleState.Connected(gatt.device.name ?: gatt.device.address)
+                }
+            } else {
+                Log.w(TAG, "Descriptor write failed or unexpected descriptor. status=$status")
+                // 失敗しても接続完了として扱う（一部デバイスはステータスが異なる）
+                mainHandler.post {
+                    _state.value = BleState.Connected(gatt.device.name ?: gatt.device.address)
+                }
+            }
+        }
+
+        // Android 13 (API 33) 以降
         override fun onCharacteristicChanged(
             gatt: BluetoothGatt,
             characteristic: BluetoothGattCharacteristic,
             value: ByteArray
         ) {
+            Log.d(TAG, "onCharacteristicChanged (API33+): ${value.size} bytes")
             handleReceivedBytes(value)
         }
 
+        // Android 12 以前
         @Suppress("DEPRECATION")
         override fun onCharacteristicChanged(
             gatt: BluetoothGatt,
             characteristic: BluetoothGattCharacteristic
         ) {
-            handleReceivedBytes(characteristic.value ?: return)
+            val value = characteristic.value ?: return
+            Log.d(TAG, "onCharacteristicChanged (legacy): ${value.size} bytes")
+            handleReceivedBytes(value)
         }
     }
 
@@ -204,6 +282,7 @@ class BleService(private val context: Context) {
             val line = receiveBuffer.substring(0, idx).trimEnd('\r')
             receiveBuffer.delete(0, idx + 1)
             if (line.isNotEmpty()) {
+                Log.v(TAG, "Received line: $line")
                 mainHandler.post { onDataReceived?.invoke(line) }
             }
         }
