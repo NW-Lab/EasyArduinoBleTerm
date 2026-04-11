@@ -88,7 +88,6 @@ class BleService(private val context: Context) {
             .build()
         bleScanner?.startScan(null, settings, scanCallback)
         Log.d(TAG, "Scan started")
-        // 15秒後に自動停止
         mainHandler.postDelayed({ stopScan() }, 15_000)
     }
 
@@ -150,9 +149,10 @@ class BleService(private val context: Context) {
             Log.d(TAG, "onConnectionStateChange: status=$status newState=$newState")
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
-                    Log.d(TAG, "Connected! Discovering services...")
-                    // サービス検出前に少し待つ（一部のデバイスで必要）
-                    mainHandler.postDelayed({ gatt.discoverServices() }, 600)
+                    Log.d(TAG, "Connected! Requesting MTU 512...")
+                    // MTU拡張を要求してから discoverServices する
+                    // （ESP32 BleSerial は大きいパケットを送る場合がある）
+                    gatt.requestMtu(512)
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     Log.d(TAG, "Disconnected. status=$status")
@@ -167,6 +167,12 @@ class BleService(private val context: Context) {
                     rxCharacteristic = null
                 }
             }
+        }
+
+        override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
+            Log.d(TAG, "onMtuChanged: mtu=$mtu status=$status")
+            // MTU 交渉完了後にサービス検出
+            gatt.discoverServices()
         }
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
@@ -191,44 +197,25 @@ class BleService(private val context: Context) {
                 return
             }
 
-            txCharacteristic = service.getCharacteristic(TX_CHAR_UUID)
-            rxCharacteristic = service.getCharacteristic(RX_CHAR_UUID)
+            val txChar = service.getCharacteristic(TX_CHAR_UUID)
+            val rxChar = service.getCharacteristic(RX_CHAR_UUID)
+            Log.d(TAG, "TX char: $txChar")
+            Log.d(TAG, "RX char: $rxChar")
 
-            Log.d(TAG, "TX char: $txCharacteristic")
-            Log.d(TAG, "RX char: $rxCharacteristic")
-
-            // TX の Notify を有効化
-            val txChar = txCharacteristic
             if (txChar == null) {
                 Log.e(TAG, "TX characteristic not found!")
                 mainHandler.post { _state.value = BleState.Error("TX Characteristic が見つかりません") }
                 return
             }
 
-            val notifySet = gatt.setCharacteristicNotification(txChar, true)
-            Log.d(TAG, "setCharacteristicNotification: $notifySet")
+            txCharacteristic = txChar
+            rxCharacteristic = rxChar
 
-            val descriptor = txChar.getDescriptor(CCCD_UUID)
-            if (descriptor == null) {
-                Log.e(TAG, "CCCD descriptor not found! Proceeding anyway...")
-                // CCCD がなくても接続完了として扱う
-                mainHandler.post {
-                    _state.value = BleState.Connected(gatt.device.name ?: gatt.device.address)
-                }
-                return
+            // setCharacteristicNotification と writeDescriptor は
+            // メインスレッドから呼ぶ（一部デバイスで必須）
+            mainHandler.post {
+                enableNotify(gatt, txChar)
             }
-
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                val result = gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
-                Log.d(TAG, "writeDescriptor (API33+): result=$result")
-            } else {
-                @Suppress("DEPRECATION")
-                descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                @Suppress("DEPRECATION")
-                val result = gatt.writeDescriptor(descriptor)
-                Log.d(TAG, "writeDescriptor (legacy): result=$result")
-            }
-            // 接続完了はonDescriptorWriteで通知
         }
 
         override fun onDescriptorWrite(
@@ -237,14 +224,13 @@ class BleService(private val context: Context) {
             status: Int
         ) {
             Log.d(TAG, "onDescriptorWrite: uuid=${descriptor.uuid} status=$status")
-            if (descriptor.uuid == CCCD_UUID && status == BluetoothGatt.GATT_SUCCESS) {
-                Log.d(TAG, "Notify enabled successfully!")
-                mainHandler.post {
-                    _state.value = BleState.Connected(gatt.device.name ?: gatt.device.address)
+            if (descriptor.uuid == CCCD_UUID) {
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    Log.d(TAG, "Notify enabled successfully!")
+                } else {
+                    Log.w(TAG, "CCCD write status=$status (non-zero, but continuing)")
                 }
-            } else {
-                Log.w(TAG, "Descriptor write failed or unexpected descriptor. status=$status")
-                // 失敗しても接続完了として扱う（一部デバイスはステータスが異なる）
+                // 成否に関わらず接続完了とする
                 mainHandler.post {
                     _state.value = BleState.Connected(gatt.device.name ?: gatt.device.address)
                 }
@@ -271,6 +257,31 @@ class BleService(private val context: Context) {
             Log.d(TAG, "onCharacteristicChanged (legacy): ${value.size} bytes")
             handleReceivedBytes(value)
         }
+    }
+
+    // メインスレッドから呼ぶこと
+    private fun enableNotify(gatt: BluetoothGatt, txChar: BluetoothGattCharacteristic) {
+        val notifySet = gatt.setCharacteristicNotification(txChar, true)
+        Log.d(TAG, "setCharacteristicNotification: $notifySet")
+
+        val descriptor = txChar.getDescriptor(CCCD_UUID)
+        if (descriptor == null) {
+            Log.w(TAG, "CCCD descriptor not found! Marking as connected anyway.")
+            _state.value = BleState.Connected(gatt.device.name ?: gatt.device.address)
+            return
+        }
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            val result = gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+            Log.d(TAG, "writeDescriptor (API33+): result=$result")
+        } else {
+            @Suppress("DEPRECATION")
+            descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+            @Suppress("DEPRECATION")
+            val result = gatt.writeDescriptor(descriptor)
+            Log.d(TAG, "writeDescriptor (legacy): result=$result")
+        }
+        // 完了は onDescriptorWrite で通知
     }
 
     private fun handleReceivedBytes(bytes: ByteArray) {
