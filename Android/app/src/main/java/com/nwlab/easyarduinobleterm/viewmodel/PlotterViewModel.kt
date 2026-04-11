@@ -1,5 +1,7 @@
 package com.nwlab.easyarduinobleterm.viewmodel
 
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import com.nwlab.easyarduinobleterm.model.CHANNEL_COLORS
 import com.nwlab.easyarduinobleterm.model.PlotChannel
@@ -14,18 +16,17 @@ private const val TAG = "PlotterViewModel"
 class PlotterViewModel(private val scope: CoroutineScope) {
 
     companion object {
-        private const val MAX_POINTS = 5000
+        private const val MAX_POINTS     = 5000
+        private const val FRAME_INTERVAL = 33L   // ~30fps
     }
 
-    // --- Display snapshot (published to UI) ---
+    // --- UI に公開する StateFlow ---
     private val _channels = MutableStateFlow<List<PlotChannel>>(emptyList())
     val channels: StateFlow<List<PlotChannel>> = _channels.asStateFlow()
 
-    // --- Time window ---
     private val _timeWindowSec = MutableStateFlow(5.0)
     val timeWindowSec: StateFlow<Double> = _timeWindowSec.asStateFlow()
 
-    // --- Y axis ---
     private val _yAutoMode = MutableStateFlow(true)
     val yAutoMode: StateFlow<Boolean> = _yAutoMode.asStateFlow()
 
@@ -35,16 +36,26 @@ class PlotterViewModel(private val scope: CoroutineScope) {
     private val _yMax = MutableStateFlow(1f)
     val yMax: StateFlow<Float> = _yMax.asStateFlow()
 
-    // --- Interaction lock ---
     private val _isInteracting = MutableStateFlow(false)
     val isInteracting: StateFlow<Boolean> = _isInteracting.asStateFlow()
 
-    // --- Raw data ---
+    // --- 生データバッファ（メインスレッドからのみアクセス）---
     private val rawChannels = mutableListOf<MutableList<PlotPoint>>()
-    private var startTimeMs = -1L
+    private var startTimeMs  = -1L
+    private var dirty        = false   // 未反映データがあるか
 
-    // --- Data ingestion ---
-    // BleService.onDataReceived から呼ばれる（メインスレッド）
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var frameScheduled = false
+
+    private val frameRunnable = Runnable {
+        frameScheduled = false
+        if (dirty && !_isInteracting.value) {
+            publishSnapshot()
+            dirty = false
+        }
+    }
+
+    // --- データ受信（メインスレッド）---
     fun addLine(line: String) {
         val parts = line.split(",").mapNotNull { it.trim().toFloatOrNull() }
         if (parts.isEmpty()) return
@@ -55,10 +66,7 @@ class PlotterViewModel(private val scope: CoroutineScope) {
         if (startTimeMs < 0) startTimeMs = now
         val timeSec = (now - startTimeMs) / 1000.0
 
-        // チャンネル数が増えたら拡張
-        while (rawChannels.size < parts.size) {
-            rawChannels.add(mutableListOf())
-        }
+        while (rawChannels.size < parts.size) rawChannels.add(mutableListOf())
 
         parts.forEachIndexed { i, value ->
             val list = rawChannels[i]
@@ -66,9 +74,10 @@ class PlotterViewModel(private val scope: CoroutineScope) {
             if (list.size > MAX_POINTS) list.removeAt(0)
         }
 
-        // インタラクション中でなければ即座に描画更新
-        if (!_isInteracting.value) {
-            publishSnapshot()
+        dirty = true
+        if (!frameScheduled) {
+            frameScheduled = true
+            mainHandler.postDelayed(frameRunnable, FRAME_INTERVAL)
         }
     }
 
@@ -85,15 +94,13 @@ class PlotterViewModel(private val scope: CoroutineScope) {
             )
         }
         _channels.value = snapshot
-
-        // 自動Yスケール
         if (_yAutoMode.value) updateAutoY(snapshot)
     }
 
     private fun updateAutoY(snapshot: List<PlotChannel>) {
-        val window      = _timeWindowSec.value
-        val latestTime  = snapshot.flatMap { it.points }.maxOfOrNull { it.timeSeconds } ?: return
-        val visiblePts  = snapshot
+        val window     = _timeWindowSec.value
+        val latestTime = snapshot.flatMap { it.points }.maxOfOrNull { it.timeSeconds } ?: return
+        val visiblePts = snapshot
             .filter { it.visible }
             .flatMap { it.points }
             .filter { it.timeSeconds >= latestTime - window }
@@ -105,28 +112,23 @@ class PlotterViewModel(private val scope: CoroutineScope) {
         _yMax.value = max + margin
     }
 
-    // --- Channel visibility ---
+    // --- チャンネル表示切り替え ---
     fun toggleChannel(index: Int) {
         _channels.value = _channels.value.map {
             if (it.index == index) it.copy(visible = !it.visible) else it
         }
     }
 
-    // --- Time window ---
+    // --- 時間軸 ---
     fun setTimePreset(seconds: Double) { _timeWindowSec.value = seconds }
 
     fun scaleTimeWindow(factor: Double) {
         _timeWindowSec.value = (_timeWindowSec.value * factor).coerceIn(0.05, 300.0)
     }
 
-    // --- Y axis ---
+    // --- Y軸 ---
     fun toggleYAxisMode() {
-        if (_yAutoMode.value) {
-            // 自動→固定: 現在の自動範囲をそのまま固定値として引き継ぐ
-            _yAutoMode.value = false
-        } else {
-            _yAutoMode.value = true
-        }
+        _yAutoMode.value = !_yAutoMode.value
     }
 
     fun scaleYAxis(factor: Float) {
@@ -143,13 +145,23 @@ class PlotterViewModel(private val scope: CoroutineScope) {
         _yMax.value += deltaValue
     }
 
-    // --- Interaction ---
-    fun setInteracting(v: Boolean) { _isInteracting.value = v }
+    // --- インタラクション ---
+    fun setInteracting(v: Boolean) {
+        _isInteracting.value = v
+        // インタラクション終了時に即座に最新データを反映
+        if (!v && dirty) {
+            publishSnapshot()
+            dirty = false
+        }
+    }
 
-    // --- Clear ---
+    // --- クリア ---
     fun clearData() {
+        mainHandler.removeCallbacks(frameRunnable)
+        frameScheduled = false
         rawChannels.clear()
         startTimeMs = -1L
+        dirty = false
         _channels.value = emptyList()
     }
 }
