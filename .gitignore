@@ -47,3 +47,21 @@ fastlane/test_output
 
 # Environment
 .env
+
+# Android
+Android/.gradle/
+Android/.kotlin/
+Android/.idea/
+Android/local.properties
+Android/captures/
+Android/**/build/
+Android/**/.cxx/
+
+# Windows / Visual Studio
+Windows/EasyArduinoBleTerm/.vs/
+Windows/EasyArduinoBleTerm/bin/
+Windows/EasyArduinoBleTerm/obj/
+Windows/EasyArduinoBleTerm/.github/copilot-instructions.md
+*.user
+*.rsuser
+*.sln.docstates

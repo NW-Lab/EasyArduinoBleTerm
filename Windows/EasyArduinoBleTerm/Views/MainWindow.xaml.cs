@@ -73,6 +73,7 @@ public sealed partial class MainWindow : Window
                     StatusDot.Fill    = new SolidColorBrush(Colors.LimeGreen);
                     StatusText.Text   = $"接続中: {_vm.Ble.ConnectedDeviceName}";
                     ConnectButton.Content = "切断";
+                    ConnectButton.IsEnabled = true;
                     break;
 
                 case BleState.ConnectingState:

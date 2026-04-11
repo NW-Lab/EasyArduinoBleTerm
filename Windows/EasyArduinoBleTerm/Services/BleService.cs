@@ -35,15 +35,21 @@ public class BleService : IDisposable
     private GattCharacteristic?              _rxChar;   // Write  (PC→ESP32)
 
     private readonly Dictionary<ulong, BleDeviceInfo> _discovered = new();
+    private readonly Dictionary<ulong, DateTimeOffset> _lastNotifiedAt = new();
     private readonly object _lock = new();
     private string _lineBuffer = string.Empty;
+    private static readonly TimeSpan DiscoveryUpdateInterval = TimeSpan.FromSeconds(5);
 
     // ---- Scan ----
 
     public void StartScan()
     {
         StopScan();
-        lock (_lock) { _discovered.Clear(); }
+        lock (_lock)
+        {
+            _discovered.Clear();
+            _lastNotifiedAt.Clear();
+        }
 
         _watcher = new BluetoothLEAdvertisementWatcher
         {
@@ -71,8 +77,23 @@ public class BleService : IDisposable
         if (string.IsNullOrWhiteSpace(name)) return;
 
         var info = new BleDeviceInfo(args.BluetoothAddress, name, args.RawSignalStrengthInDBm);
-        lock (_lock) { _discovered[args.BluetoothAddress] = info; }
-        DeviceDiscovered?.Invoke(this, info);
+        var now = DateTimeOffset.UtcNow;
+        var shouldNotify = false;
+
+        lock (_lock)
+        {
+            _discovered[args.BluetoothAddress] = info;
+
+            if (!_lastNotifiedAt.TryGetValue(args.BluetoothAddress, out var lastNotified) ||
+                now - lastNotified >= DiscoveryUpdateInterval)
+            {
+                _lastNotifiedAt[args.BluetoothAddress] = now;
+                shouldNotify = true;
+            }
+        }
+
+        if (shouldNotify)
+            DeviceDiscovered?.Invoke(this, info);
     }
 
     // ---- Connect ----
