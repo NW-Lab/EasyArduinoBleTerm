@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -31,6 +32,13 @@ public partial class TerminalViewModel : ObservableObject
     // 生データ（タイムスタンプ付き）
     private readonly List<TerminalMessage> _messages = new();
 
+    // 受信バッファ（BLEスレッドからアクセス → lock で保護）
+    private readonly List<TerminalMessage> _pending = new();
+    private readonly object _pendingLock = new();
+
+    // 30fps 表示タイマー
+    private readonly DispatcherQueueTimer _displayTimer;
+
     // ---- Constructor ----
 
     public TerminalViewModel(BleService ble, DispatcherQueue dispatcher)
@@ -38,28 +46,50 @@ public partial class TerminalViewModel : ObservableObject
         _ble        = ble;
         _dispatcher = dispatcher;
         _ble.DataReceived += OnDataReceived;
+
+        _displayTimer = dispatcher.CreateTimer();
+        _displayTimer.Interval = TimeSpan.FromMilliseconds(33); // ~30fps
+        _displayTimer.Tick += OnDisplayTimerTick;
+        _displayTimer.Start();
     }
 
-    // ---- Data Receive ----
+    // ---- Data Receive（BLEスレッドから呼ばれる）----
 
     private void OnDataReceived(object? sender, string line)
     {
         var msg = new TerminalMessage { Timestamp = DateTime.Now, Text = line };
+        lock (_pendingLock)
+        {
+            _pending.Add(msg);
+        }
+    }
 
-        _dispatcher.TryEnqueue(() =>
+    // ---- Display Timer（UIスレッド、33ms毎）----
+
+    private void OnDisplayTimerTick(DispatcherQueueTimer timer, object args)
+    {
+        List<TerminalMessage> batch;
+        lock (_pendingLock)
+        {
+            if (_pending.Count == 0) return;
+            batch = new List<TerminalMessage>(_pending);
+            _pending.Clear();
+        }
+
+        foreach (var msg in batch)
         {
             _messages.Add(msg);
             Lines.Add(msg.DisplayText(ShowTimestamp));
+        }
 
-            // バッファー上限を超えたら古いものを削除
-            if (_messages.Count > MaxMessages)
-            {
-                int excess = _messages.Count - MaxMessages;
-                _messages.RemoveRange(0, excess);
-                for (int i = 0; i < excess; i++)
-                    if (Lines.Count > 0) Lines.RemoveAt(0);
-            }
-        });
+        // バッファ上限を超えたら古いものを削除
+        if (_messages.Count > MaxMessages)
+        {
+            int excess = _messages.Count - MaxMessages;
+            _messages.RemoveRange(0, excess);
+            for (int i = 0; i < excess; i++)
+                if (Lines.Count > 0) Lines.RemoveAt(0);
+        }
     }
 
     // ---- Timestamp Toggle ----
@@ -90,12 +120,14 @@ public partial class TerminalViewModel : ObservableObject
     [RelayCommand]
     private void Clear()
     {
+        lock (_pendingLock) { _pending.Clear(); }
         _messages.Clear();
         Lines.Clear();
     }
 
     public void Dispose()
     {
+        _displayTimer.Stop();
         _ble.DataReceived -= OnDataReceived;
     }
 }
