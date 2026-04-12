@@ -15,8 +15,8 @@ Arduino IDE の **シリアルモニター** と **シリアルプロッター**
 |---|---|
 | **Web 版** | ブラウザで **[https://nw-lab.github.io/EasyArduinoBleTerm/](https://nw-lab.github.io/EasyArduinoBleTerm/)** を開く<br>※ Chrome または Edge が必要です。 |
 | **iOS / iPadOS 版** | **[App Store からインストール](https://apps.apple.com/jp/app/easyarduinobleterm/id6759859872)** |
-| **Android 版** | **[リリースページ](https://github.com/NW-Lab/EasyArduinoBleTerm/releases/latest)** から `EasyArduinoBleTermForAndroid.apk` をダウンロードしてインストール |
-| **Windows 版** | **[リリースページ](https://github.com/NW-Lab/EasyArduinoBleTerm/releases/latest)** から `EasyArduinoBleTermForWindows.zip` をダウンロードし、展開して実行 |
+| **Android 版** | 下記「Android 版のインストール手順」を参照 |
+| **Windows 版** | 下記「Windows 版のインストール手順」を参照 |
 
 ---
 
@@ -62,6 +62,47 @@ EasyArduinoBleTerm/
 | **横軸（時間幅）ズーム** | ピンチ（水平） | ホイール回転 |
 | **縦軸（値の幅）ズーム** | ピンチ（垂直） | Ctrl + ホイール |
 | **縦軸オフセット移動** | 2本指ドラッグ | 右ドラッグ / Shift + ホイール |
+
+---
+
+## Android 版のインストール手順
+
+Android は Google Play 以外からインストールする「提供元不明のアプリ」の許可が必要です。
+
+**1. APK ファイルをダウンロード**
+
+[リリースページ](https://github.com/NW-Lab/EasyArduinoBleTerm/releases/latest) から `EasyArduinoBleTermForAndroid.apk` をダウンロードします。
+
+**2. 「提供元不明のアプリ」のインストールを許可する**
+
+Android のバージョンによって手順が異なります。
+
+| Android バージョン | 手順 |
+|---|---|
+| Android 8.0 以降 | APK ファイルをタップ → 「この提供元のアプリを許可」をオンにする |
+| Android 7 以前 | 設定 → セキュリティ → 「提供元不明のアプリ」をオン |
+
+**3. インストール**
+
+ダウンロードした APK ファイルをタップし、「インストール」をタップします。インストール完了後、「提供元不明のアプリ」の許可を元に戻しても構いません。
+
+---
+
+## Windows 版のインストール手順
+
+**1. ZIP ファイルをダウンロード**
+
+[リリースページ](https://github.com/NW-Lab/EasyArduinoBleTerm/releases/latest) から `EasyArduinoBleTermForWindows.zip` をダウンロードします。
+
+**2. ZIP を展開する**
+
+ダウンロードした ZIP ファイルを右クリック → 「すべて展開」で任意のフォルダに展開します。
+
+**3. 実行する**
+
+展開したフォルダ内の `EasyArduinoBleTerm.exe` をダブルクリックして起動します。
+
+> **注意:** 初回起動時に「Windows によって PC が保護されました」（SmartScreen）が表示される場合があります。「詳細情報」→「実行」をクリックすると起動できます。
 
 ---
 
