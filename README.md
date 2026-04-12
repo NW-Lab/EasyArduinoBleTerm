@@ -7,19 +7,22 @@ Arduino IDE の **シリアルモニター** と **シリアルプロッター**
 
 ---
 
-## Web 版（ブラウザですぐに使えます）
+## インストール・利用方法（ビルド不要）
 
-**URL:** [https://nw-lab.github.io/EasyArduinoBleTerm/](https://nw-lab.github.io/EasyArduinoBleTerm/)
+各プラットフォームですぐに利用できる形式を用意しています。
 
-| 項目 | 内容 |
+| プラットフォーム | インストール・利用方法 |
 |---|---|
-| ブラウザ | Google Chrome または Microsoft Edge |
-| OS | Windows 10/11・macOS・Android（iOS / Safari は非対応） |
-| 備考 | Web Bluetooth API を使用しているため、対応ブラウザが必要です。 |
+| **Web 版** | ブラウザで **[https://nw-lab.github.io/EasyArduinoBleTerm/](https://nw-lab.github.io/EasyArduinoBleTerm/)** を開く<br>※ Chrome または Edge が必要です。 |
+| **iOS / iPadOS 版** | **[App Store からインストール](https://apps.apple.com/jp/app/easyarduinobleterm/id6759859872)** |
+| **Android 版** | **[リリースページ](https://github.com/NW-Lab/EasyArduinoBleTerm/releases/latest)** から `EasyArduinoBleTermForAndroid.apk` をダウンロードしてインストール |
+| **Windows 版** | **[リリースページ](https://github.com/NW-Lab/EasyArduinoBleTerm/releases/latest)** から `EasyArduinoBleTermForWindows.zip` をダウンロードし、展開して実行 |
 
 ---
 
 ## リポジトリ構成
+
+ソースコードからビルド・改造したい場合は以下のディレクトリを参照してください。
 
 ```
 EasyArduinoBleTerm/
@@ -72,82 +75,28 @@ EasyArduinoBleTerm/
 
 ---
 
-## iOS 版のセットアップ
+## 開発者向けビルド手順
 
-### 必要環境
-| 項目 | 内容 |
-|---|---|
-| OS | macOS 13 以降 |
-| IDE | Xcode 15 以降 |
-| 実行環境 | iPhone / iPad（iOS 16 以降）実機 ※ BLE はシミュレーター不可 |
+### iOS 版
+- **環境:** macOS 13 以降、Xcode 15 以降
+- **手順:** `iOS/EasyArduinoBleTerm.xcodeproj` を開き、Signing を設定して実機にビルド（シミュレーター不可）。
 
-### ビルド手順
-```bash
-git clone https://github.com/NW-Lab/EasyArduinoBleTerm.git
-cd EasyArduinoBleTerm/iOS
-open EasyArduinoBleTerm.xcodeproj
-```
-Xcode の **Signing & Capabilities** タブで開発チームを設定し、実機にビルドしてください。
+### Android 版
+- **環境:** Android Studio Ladybug 以降
+- **手順:** `Android/` フォルダを開き、Gradle Sync 後に実機にビルド（エミュレーター不可）。
 
----
+### Windows 版
+- **環境:** Windows 10/11、Visual Studio 2022（.NET デスクトップ開発 + Windows アプリ開発）
+- **手順:** `Windows/EasyArduinoBleTerm/EasyArduinoBleTerm.csproj` を開きビルド。
 
-## Android 版のセットアップ
-
-### 必要環境
-| 項目 | 内容 |
-|---|---|
-| IDE | Android Studio Ladybug（2024.2.1）以降 |
-| 対応 Android | Android 8.0（API 26）以降 |
-| 実行環境 | BLE 対応 Android 実機 ※ エミュレーターでは BLE 不可 |
-
-### ビルド手順
-```bash
-git clone https://github.com/NW-Lab/EasyArduinoBleTerm.git
-```
-Android Studio で `Android/` フォルダーを **Open an existing project** で開き、Gradle Sync 後に実機にビルドしてください。
-
-### 配布方法（APK）
-1. Android Studio メニュー → **Build → Build Bundle(s) / APK(s) → Build APK(s)**
-2. `app/build/outputs/apk/debug/app-debug.apk` が生成される
-3. APK ファイルをそのまま共有（メール・Google Drive など）
-4. 受け取った側は「提供元不明のアプリ」を許可してインストール
-
----
-
-## Windows 版のセットアップ
-
-### 必要環境
-| 項目 | 内容 |
-|---|---|
-| OS | Windows 10 (1903) 以降 または Windows 11 |
-| IDE | Visual Studio 2022（17.8 以降） |
-| ワークロード | .NET デスクトップ開発 + Windows アプリ開発 |
-| その他 | Windows App SDK 拡張機能、BLE 対応 Bluetooth アダプター |
-
-### ビルド手順
-```bash
-git clone https://github.com/NW-Lab/EasyArduinoBleTerm.git
-```
-Visual Studio で `Windows/EasyArduinoBleTerm/EasyArduinoBleTerm.csproj` を開き、ビルドしてください。
-
----
-
-## Web 版のローカル開発
-
-Web 版は GitHub Pages で公開済みですが、ローカルで開発・実行することも可能です。
-
-### 必要環境
-- Node.js 20 以降
-- pnpm
-
-### ビルド手順
-```bash
-git clone https://github.com/NW-Lab/EasyArduinoBleTerm.git
-cd EasyArduinoBleTerm/Web/EasyArduinoBleTerm
-pnpm install
-pnpm dev
-```
-`http://localhost:5173` を Chrome / Edge で開いてください。
+### Web 版
+- **環境:** Node.js 20 以降、pnpm
+- **手順:**
+  ```bash
+  cd Web/EasyArduinoBleTerm
+  pnpm install
+  pnpm dev
+  ```
 
 ---
 
