@@ -8,18 +8,23 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack {
-            TabView(selection: $selectedTab) {
-                TerminalView(bleManager: bleManager)
-                    .tabItem {
-                        Label("ターミナル", systemImage: "terminal")
-                    }
-                    .tag(0)
+            VStack(spacing: 0) {
+                Picker("表示", selection: $selectedTab) {
+                    Text("ターミナル").tag(0)
+                    Text("プロッター").tag(1)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+                .padding(.vertical, 8)
 
-                PlotterView(vm: plotterVM)
-                    .tabItem {
-                        Label("プロッター", systemImage: "waveform.path.ecg")
-                    }
-                    .tag(1)
+                TabView(selection: $selectedTab) {
+                    TerminalView(bleManager: bleManager)
+                        .tag(0)
+
+                    PlotterView(vm: plotterVM)
+                        .tag(1)
+                }
+                .toolbar(.hidden, for: .tabBar)
             }
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
