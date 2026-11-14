@@ -5,6 +5,7 @@ struct TerminalView: View {
     @State private var showTimestamp: Bool = true
     @State private var inputText: String = ""
     @State private var autoScroll: Bool = true
+    @FocusState private var inputIsFocused: Bool
 
     // 最後にスクロールした行数。同じ行数なら再スクロールしない
     @State private var lastScrolledCount: Int = 0
@@ -94,6 +95,7 @@ struct TerminalView: View {
                     .font(.system(.body, design: .monospaced))
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
+                    .focused($inputIsFocused)
 
                 Button {
                     guard !inputText.isEmpty else { return }
@@ -104,6 +106,14 @@ struct TerminalView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(bleManager.connectedPeripheral == nil || inputText.isEmpty)
+
+                Button {
+                    inputIsFocused = false
+                } label: {
+                    Image(systemName: "keyboard.chevron.compact.down")
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel("キーボードを閉じる")
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
