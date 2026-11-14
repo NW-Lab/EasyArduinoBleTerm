@@ -8,23 +8,38 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                Picker("表示", selection: $selectedTab) {
-                    Text("ターミナル").tag(0)
-                    Text("プロッター").tag(1)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-                .padding(.vertical, 8)
+            GeometryReader { geometry in
+                VStack(spacing: 0) {
+                    Picker("表示", selection: $selectedTab) {
+                        Text("ターミナル").tag(0)
+                        Text("プロッター").tag(1)
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
 
-                TabView(selection: $selectedTab) {
-                    TerminalView(bleManager: bleManager)
-                        .tag(0)
+                    TabView(selection: $selectedTab) {
+                        TerminalView(bleManager: bleManager)
+                            .tag(0)
 
-                    PlotterView(vm: plotterVM)
-                        .tag(1)
+                        PlotterView(vm: plotterVM)
+                            .tag(1)
+                    }
+                    .toolbar(.hidden, for: .tabBar)
                 }
-                .toolbar(.hidden, for: .tabBar)
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 24)
+                        .onEnded { value in
+                            let horizontalDistance = value.translation.width
+                            let verticalDistance = value.translation.height
+                            guard value.startLocation.x >= geometry.size.width - 24,
+                                  horizontalDistance <= -50,
+                                  abs(horizontalDistance) > abs(verticalDistance) * 1.5 else {
+                                return
+                            }
+                            selectedTab = selectedTab == 0 ? 1 : 0
+                        }
+                )
             }
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
