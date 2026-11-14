@@ -18,14 +18,17 @@ struct ContentView: View {
                     .padding(.horizontal)
                     .padding(.vertical, 8)
 
-                    TabView(selection: $selectedTab) {
+                    ZStack {
                         TerminalView(bleManager: bleManager)
-                            .tag(0)
+                            .opacity(selectedTab == 0 ? 1 : 0)
+                            .allowsHitTesting(selectedTab == 0)
+                            .accessibilityHidden(selectedTab != 0)
 
                         PlotterView(vm: plotterVM)
-                            .tag(1)
+                            .opacity(selectedTab == 1 ? 1 : 0)
+                            .allowsHitTesting(selectedTab == 1)
+                            .accessibilityHidden(selectedTab != 1)
                     }
-                    .toolbar(.hidden, for: .tabBar)
                 }
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 24)
@@ -72,8 +75,8 @@ struct ContentView: View {
         }
         .onAppear {
             // BLEManagerのデータ受信コールバックをPlotterVMに接続
-            bleManager.onDataReceived = { [weak plotterVM] line, timestamp in
-                plotterVM?.processLine(line, timestamp: timestamp)
+            bleManager.onDataReceived = { line, timestamp in
+                plotterVM.processLine(line, timestamp: timestamp)
             }
         }
     }

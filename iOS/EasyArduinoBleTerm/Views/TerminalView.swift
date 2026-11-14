@@ -75,7 +75,7 @@ struct TerminalView: View {
                     }
                     .padding(.vertical, 4)
                 }
-                .onChange(of: bleManager.receivedMessages.count) { newCount in
+                .onChange(of: bleManager.receivedMessages.count) { _, newCount in
                     // 行数が変わっていない場合や自動スクロールOFFの場合はスキップ
                     guard autoScroll, newCount != lastScrolledCount,
                           let last = bleManager.receivedMessages.last else { return }
